@@ -7,7 +7,10 @@
 # (distro-names.ps1 Resolve-PackageRoot), never a hand-joined path. The same shape as Unbind Vanilla Controls W3's.
 param(
     [string]$ProjectRoot = 'D:\Claude output',
-    [string]$Stage = '7. current test builds'
+    [string]$Stage = '7. current test builds',
+    # a retest of a number that failed its test reuses the number (rule 48); the label tells the folders apart, as the
+    # project's earlier test builds do ("Apocrypha Menu Framework 1.0.3 (game menu entry + settings test)")
+    [string]$Label = ''
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -23,7 +26,9 @@ foreach ($f in 'blob0.bundle', 'metadata.store') {
 
 . (Join-Path $ProjectRoot '.MD\scripts\distro-names.ps1')
 $root = Resolve-PackageRoot -Root (Join-Path $ProjectRoot $Stage) -ModName 'Simple Loadout System' -Game 'Witcher 3' -ProjectRoot $ProjectRoot
-$pkg = Join-Path $root "Simple Loadout System $version"
+$name = "Simple Loadout System $version"
+if ($Label) { $name = "$name ($Label)" }
+$pkg = Join-Path $root $name
 if (Test-Path -LiteralPath $pkg) { throw "$pkg already exists - a version is packaged once" }
 New-Item -ItemType Directory -Force -Path $pkg | Out-Null
 Copy-Item -Path (Join-Path $repo 'dist\*') -Destination $pkg -Recurse

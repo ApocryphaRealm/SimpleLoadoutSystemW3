@@ -154,7 +154,10 @@ function SLS_CaptureAlways(player : W3PlayerWitcher, inv : CInventoryComponent) 
 
 // Takes off every worn piece of gear; with a loadout to leave, its pieces go to the loadout's storage. Always-worn
 // pieces stay on. Returns how many quest/kept pieces stayed in the inventory.
-function SLS_StoreWorn(player : W3PlayerWitcher, inv : CInventoryComponent, stash : CInventoryComponent, from : int, out stored : int) : int
+// Each piece taken off also leaves the menu's paperdoll slot (PaperdollRemoveItem, as the menu's own unequip does,
+// inventoryMenu.ws UnequipItem) while its id is still the inventory's: 1.0.0 skipped it and the owner saw "whatever was
+// last equipped" stay on show after a switch to an empty loadout.
+function SLS_StoreWorn(menu : CR4InventoryMenu, player : W3PlayerWitcher, inv : CInventoryComponent, stash : CInventoryComponent, from : int, out stored : int) : int
 {
 	var slots : array<EEquipmentSlots>;
 	var item, moved : SItemUniqueId;
@@ -183,6 +186,7 @@ function SLS_StoreWorn(player : W3PlayerWitcher, inv : CInventoryComponent, stas
 		}
 		quantity = inv.GetItemQuantity(item);
 		player.UnequipItem(item);
+		menu.PaperdollRemoveItem(item);
 		if (from < 0)
 		{
 			SLS_Log("taken off, stays in the inventory: " + NameToString(inv.GetItemName(item)));
@@ -411,7 +415,7 @@ function SLS_Press(box : int)
 		showNotification(GetLocStringByKeyExt("sls_always_set") + " " + IntToString(always));
 	}
 	stored = 0;
-	kept = SLS_StoreWorn(player, inv, stash, from, stored);
+	kept = SLS_StoreWorn(this, player, inv, stash, from, stored);
 	restored = 0;
 	if (to >= 0)
 	{
@@ -425,10 +429,15 @@ function SLS_Press(box : int)
 	}
 	SLS_Log("switch done: stored " + IntToString(stored) + ", restored " + IntToString(restored) + ", kept " + IntToString(kept));
 
+	// The menu's own refresh after equipping or unequipping (inventoryMenu.ws OnEquipItem / UnequipItem): the paperdoll,
+	// the grid, the weight, the stats - and the 3D Geralt beside them, a separate GUI scene entity that only takes the
+	// player's items when told (UpdateGuiSceneEntityItems). 1.0.0 never told it: the owner saw no clothes on the model
+	// while the inventory showed the gear equipped ("there might be a refresh issue").
 	PaperdollUpdateAll();
 	UpdateData();
 	UpdateEncumbranceInfo();
 	UpdatePlayerStatisticsData();
+	UpdateGuiSceneEntityItems();
 	SLS_PushBoxes();
 }
 

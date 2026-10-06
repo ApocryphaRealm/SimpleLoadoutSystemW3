@@ -26,5 +26,11 @@ logic as the other SLS mods."*
 * **Settings**: Options > Mods > Simple Loadout System > Loadouts (1-4, default 4).
 * **Languages**: all eighteen of the game's language files; our eleven translated, esmx as Spanish, zh in traditional
   characters, the rest English.
+* **Refresh after a switch** (the owner's first test, 2026-10-06: "whatever was last equipped seems to appear whenever you
+  unequip everything when switching to an empty loadout" and "I have no clothes on, even though the gear is equipped in
+  the inventory ... there might be a refresh issue"): the switch now does what the menu's own equip and unequip do - each
+  piece taken off leaves its paperdoll slot (PaperdollRemoveItem), and the 3D Geralt beside the paperdoll, a separate GUI
+  scene entity, is told to take the player's items again (UpdateGuiSceneEntityItems). The first build never told it, so
+  it kept whatever it last wore.
 * **Observability**: every decision is logged on the `SimpleLoadoutSystem` channel; `SLS_DebugState()` returns the
   active loadout and each loadout's stored pieces for a test run (read-only).
