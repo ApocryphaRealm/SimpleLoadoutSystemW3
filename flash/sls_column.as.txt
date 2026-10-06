@@ -35,6 +35,7 @@
       protected var slsHadModule:Object = null;
       protected var slsFeedbackId:int = -1;
       protected var slsShown:Boolean = false;
+      protected var slsStageHooked:Boolean = false;
 
       protected function slsInit() : void
       {
@@ -46,6 +47,7 @@
          dispatchEvent(new GameEvent(GameEvent.REGISTER,"inventory.sls.boxes",[this.slsHandleBoxes]));
          addEventListener(Event.ENTER_FRAME,this.slsEnterFrame,false,0,true);
          addEventListener(MouseEvent.MOUSE_DOWN,this.slsAnyMouseDown,true,0,true);
+         this.slsHookStage();
          dispatchEvent(new GameEvent(GameEvent.CALL,"OnBreakPoint",["SLS|ready"]));
       }
 
@@ -194,9 +196,35 @@
          }
       }
 
+      // While the column has the focus it takes every press FIRST, before the menu's modules. The menu's own handler
+      // (handleInputNavigate) listens at priority -10, after the modules, and an unfocused item grid still acted on A:
+      // its list equipped the armour its cursor rested on, so every box press put on a piece the player never chose and
+      // the switch then stored it (the owner's retest, 2026-10-06: "the model for an armor automatically gets applied to
+      // the chest", Medium armor 11 / Light armor 04 in the log). Priority 100 on the stage runs before every module.
+      protected function slsHookStage() : void
+      {
+         if(!this.slsStageHooked && stage)
+         {
+            // both phases: a press the game dispatches on the stage itself reaches the bubble/target listener, one it
+            // dispatches on a focused child reaches the capture listener before that child does
+            stage.addEventListener(InputEvent.INPUT,this.slsStageInput,true,100,true);
+            stage.addEventListener(InputEvent.INPUT,this.slsStageInput,false,100,true);
+            this.slsStageHooked = true;
+         }
+      }
+
+      protected function slsStageInput(param1:InputEvent) : void
+      {
+         if(this.slsFocused && !param1.handled)
+         {
+            this.slsHandleInput(param1);
+         }
+      }
+
       // shown only on the player's own inventory with the paperdoll (not in a shop, container, stash or horse view)
       protected function slsEnterFrame(param1:Event) : void
       {
+         this.slsHookStage();
          var _loc2_:Boolean = this._inventoryMode == IMS_Player && !this._filteringMode && Boolean(this.mcPaperDollModule) && this.mcPaperDollModule.visible && this.slsBoxes.length > 0;
          if(_loc2_ != this.slsShown)
          {
@@ -310,6 +338,11 @@
          if(!this.slsShown)
          {
             return false;
+         }
+         if(this.slsFocused && param1.handled)
+         {
+            // already served by the stage listener at priority 100 (it marks every press it takes as handled)
+            return true;
          }
          if(!this.slsFocused)
          {

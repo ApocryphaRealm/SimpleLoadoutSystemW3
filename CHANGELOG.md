@@ -32,5 +32,12 @@ logic as the other SLS mods."*
   piece taken off leaves its paperdoll slot (PaperdollRemoveItem), and the 3D Geralt beside the paperdoll, a separate GUI
   scene entity, is told to take the player's items again (UpdateGuiSceneEntityItems). The first build never told it, so
   it kept whatever it last wore.
+* **The column takes its presses first** (the owner's retest, 2026-10-06: "the model for an armor automatically gets
+  applied to the chest ... after switching between the first and second loadouts repeatedly, it changes to a different
+  armor"; the script log showed "Medium armor 11" and "Light armor 04", which he never equipped, stored as loadout gear).
+  The column read its presses after the menu's modules, and the item grid - though unfocused - still acted on A: its list
+  equipped the armour under its cursor, the piece beside the column, and the switch that followed stored it. While the
+  column has the focus it now takes every press first (stage capture and bubble listeners at priority 100) and passes
+  only B on, so the grid and the paperdoll never see a press meant for the column.
 * **Observability**: every decision is logged on the `SimpleLoadoutSystem` channel; `SLS_DebugState()` returns the
   active loadout and each loadout's stored pieces for a test run (read-only).
