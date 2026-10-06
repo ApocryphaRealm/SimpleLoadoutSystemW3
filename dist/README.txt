@@ -28,7 +28,7 @@ HOW IT WORKS
   trophies and horse gear are left alone. Quest items are only taken off, never stored; the infinite bolts stay as they
   are.
 - Where the gear is kept: the stash - the one every stash chest in the world opens. Stored loadout gear is hidden from
-  the stash's list, so it is not taken out by mistake; it keeps its runes, glyphs, dye and condition.
+  the stash's list, so it is not taken out by mistake.
 - You cannot change loadouts in combat.
 
 
