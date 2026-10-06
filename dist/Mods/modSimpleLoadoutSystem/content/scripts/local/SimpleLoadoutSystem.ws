@@ -301,6 +301,10 @@ function OnBreakPoint(text : string)
 	}
 }
 
+// True while the loadout column has the pad's focus (the movie says so: "SLS|focus|1" / "SLS|focus|0").
+@addField(CR4InventoryMenu)
+var slsColumnFocused : bool;
+
 @addMethod(CR4InventoryMenu)
 function SLS_OnMovie(text : string)
 {
@@ -311,6 +315,16 @@ function SLS_OnMovie(text : string)
 		SLS_PushBoxes();
 		return;
 	}
+	if (text == "SLS|focus|1")
+	{
+		SLS_SetColumnFocus(true);
+		return;
+	}
+	if (text == "SLS|focus|0")
+	{
+		SLS_SetColumnFocus(false);
+		return;
+	}
 	if (StrBeginsWith(text, "SLS|activate|"))
 	{
 		box = StringToInt(StrAfterLast(text, "|"), -1);
@@ -318,6 +332,58 @@ function SLS_OnMovie(text : string)
 		return;
 	}
 	SLS_Log("unknown message from the column: " + text);
+}
+
+// THE GRID'S ACTIONS ARE OFF WHILE THE COLUMN HAS THE FOCUS (the owner's two retests, 2026-10-06: "whenever I press
+// loadout one, it selected the armor next to it"; his screenshot showed the ARMOR grid still selecting the item beside the
+// column, its tooltip open and the hint bar offering that item's actions). The hint bar is the common menu's - another
+// movie - and its A reaches this menu as OnInputHandled, which hands it to the current context (the grid's item context),
+// whose primary action equips the selected item: no listener in our movie can stop that. So, the way the menu itself
+// does it while the player-stats panel is up (OnPlayerStatsShown / OnPlayerStatsHidden): the context is deactivated while
+// the column has the focus (its buttons leave the hint bar) and put back after, and OnInputHandled is not passed on.
+@addMethod(CR4InventoryMenu)
+function SLS_SetColumnFocus(focused : bool)
+{
+	if (slsColumnFocused == focused)
+	{
+		return;
+	}
+	slsColumnFocused = focused;
+	if (focused)
+	{
+		SLS_Log("column focus: on (the grid's actions are off)");
+	}
+	else
+	{
+		SLS_Log("column focus: off (the grid's actions are back)");
+	}
+	if (!m_currentContext)
+	{
+		return;
+	}
+	if (focused)
+	{
+		m_currentContext.Deactivate();
+	}
+	else
+	{
+		ActivateContext(m_currentContext);
+		m_currentContext.UpdateContext();
+	}
+}
+
+// An event wrapper: no early return (logic library, AMF Witcher 3).
+@wrapMethod(CR4InventoryMenu)
+function OnInputHandled(NavCode : string, KeyCode : int, ActionId : int)
+{
+	if (slsColumnFocused)
+	{
+		SLS_Log("hint-bar input " + NavCode + " not passed to the grid's context: the loadout column has the focus");
+	}
+	else
+	{
+		wrappedMethod(NavCode, KeyCode, ActionId);
+	}
 }
 
 // The column's boxes: the loadouts, then "Always worn"; the active one lit.

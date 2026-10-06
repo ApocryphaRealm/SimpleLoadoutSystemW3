@@ -39,5 +39,13 @@ logic as the other SLS mods."*
   equipped the armour under its cursor, the piece beside the column, and the switch that followed stored it. While the
   column has the focus it now takes every press first (stage capture and bubble listeners at priority 100) and passes
   only B on, so the grid and the paperdoll never see a press meant for the column.
+* **The grid's own actions are off while the column has the focus** (the third retest, 2026-10-06: "whenever I press
+  loadout one, it selected the armor next to it"; his screenshot: the ARMOR grid still selecting the item beside the column,
+  its tooltip open, the hint bar offering its actions). The press that equipped it never went through our movie: the hint
+  bar belongs to the common menu, another movie, and its A reaches the inventory script as OnInputHandled, which hands it
+  to the grid's item context and its primary action - equip. Now, as the menu itself does while the player-stats panel is
+  up, the column's focus deactivates that context (its buttons leave the hint bar) and the script does not pass
+  OnInputHandled on until the focus leaves the column; the movie also blocks the grid's tooltip meanwhile. The earlier
+  "takes its presses first" change stays: it keeps the grid's list from moving under the column's Up/Down.
 * **Observability**: every decision is logged on the `SimpleLoadoutSystem` channel; `SLS_DebugState()` returns the
   active loadout and each loadout's stored pieces for a test run (read-only).

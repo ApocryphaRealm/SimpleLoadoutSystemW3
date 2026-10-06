@@ -257,6 +257,13 @@
          }
          this.slsFocused = true;
          this.slsHover = -1;
+         // the grid's item actions and tooltip are off while the column has the focus: the script deactivates the
+         // menu's context (the hint bar's A otherwise equips the grid's selected item), the tooltip manager is blocked
+         dispatchEvent(new GameEvent(GameEvent.CALL,"OnBreakPoint",["SLS|focus|1"]));
+         if(_contextMgr)
+         {
+            _contextMgr.blockTooltips(true,true);
+         }
          this.slsCursor = this.slsActiveIndex();
          if(this.slsFeedbackId == -1)
          {
@@ -273,6 +280,11 @@
          var _loc2_:Object = this.slsHadModule;
          this.slsFocused = false;
          this.slsHadModule = null;
+         if(_contextMgr)
+         {
+            _contextMgr.blockTooltips(false);
+         }
+         dispatchEvent(new GameEvent(GameEvent.CALL,"OnBreakPoint",["SLS|focus|0"]));
          if(this.slsFeedbackId != -1)
          {
             InputFeedbackManager.removeButton(this,this.slsFeedbackId);
