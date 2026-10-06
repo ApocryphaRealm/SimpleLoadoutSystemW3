@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Simple Loadout System: Options > Mods > Simple Loadout System (and the same row in Apocrypha Menu Framework).
+     LoadoutCount: how many loadout boxes the inventory's column shows above "Always worn". The value is the count itself;
+     the list runs 4 down to 1 so the entry the menu shows before anything was chosen (the first) is the default the
+     script uses when the value is empty (SimpleLoadoutSystem.ws SLS_Count). -->
+<UserConfig>
+	<Group id="SimpleLoadoutSystem" displayName="Mods.sls_menu">
+		<VisibleVars>
+			<Var id="LoadoutCount" displayName="sls_menu_count" displayType="OPTIONS">
+				<OptionsArray>
+					<Option id="0" displayName="sls_count_4">
+						<Entry varId="LoadoutCount" value="4"/>
+					</Option>
+					<Option id="1" displayName="sls_count_3">
+						<Entry varId="LoadoutCount" value="3"/>
+					</Option>
+					<Option id="2" displayName="sls_count_2">
+						<Entry varId="LoadoutCount" value="2"/>
+					</Option>
+					<Option id="3" displayName="sls_count_1">
+						<Entry varId="LoadoutCount" value="1"/>
+					</Option>
+				</OptionsArray>
+			</Var>
+		</VisibleVars>
+	</Group>
+</UserConfig>

@@ -1,0 +1,410 @@
+
+      // ---- Simple Loadout System: the loadout column ------------------------------------------------------------
+      // Inserted into the game's MenuInventory class by tools/build_flash.py (our code only; the class itself is read
+      // from the player's REDkit at build time). The owner, 2026-10-06: "four or five buttons ... positioned vertically
+      // in between the armor area and the equip slots, which can be navigated to with the controller. The same logic as
+      // the other SLS mods." Five boxes: the loadouts and "Always worn", in the empty strip between the item grid's
+      // ARMOR panel and the paperdoll's first slot column.
+      //
+      // Navigation joins the menu's own: the menu moves between its modules with D-pad Left/Right that a module did not
+      // use (CoreMenu.handleInputNavigate). Right from the item grid's right edge, or Left from the paperdoll's left edge,
+      // enters the column instead; Up/Down move between the boxes; A (keyboard E or Enter) selects; Left goes back to
+      // the grid, Right on to the paperdoll; B closes the menu as always. While the column has focus the module that had
+      // it is unfocused, so no grid or paperdoll reacts to the same press.
+      //
+      // The press goes to WitcherScript through the base menu's OnBreakPoint event ("SLS|activate|<box>"), which the
+      // mod's script wraps; the script answers through the "inventory.sls.boxes" binding. The switch itself only ever
+      // runs from this press (the owner's rule for every SLS: nothing moves until a box was navigated to and activated).
+
+      protected static const SLS_X:Number = 724;
+      protected static const SLS_Y:Number = 232;
+      protected static const SLS_W:Number = 186;
+      protected static const SLS_H:Number = 50;
+      protected static const SLS_GAP:Number = 10;
+      protected static const SLS_FONT_SIZE:int = 22;
+      protected static const SLS_LINE:uint = 0x8C8C8C;
+      protected static const SLS_TEXT:uint = 0xE6E1D6;
+      protected static const SLS_LIT:uint = 0xE8C27A;
+
+      protected var slsBoxes:Array = [];
+      protected var slsData:Array = null;
+      protected var slsLayer:Sprite = null;
+      protected var slsCursor:int = 0;
+      protected var slsFocused:Boolean = false;
+      protected var slsHover:int = -1;
+      protected var slsHadModule:Object = null;
+      protected var slsFeedbackId:int = -1;
+      protected var slsShown:Boolean = false;
+
+      protected function slsInit() : void
+      {
+         this.slsLayer = new Sprite();
+         this.slsLayer.x = SLS_X;
+         this.slsLayer.y = SLS_Y;
+         this.slsLayer.visible = false;
+         addChild(this.slsLayer);
+         dispatchEvent(new GameEvent(GameEvent.REGISTER,"inventory.sls.boxes",[this.slsHandleBoxes]));
+         addEventListener(Event.ENTER_FRAME,this.slsEnterFrame,false,0,true);
+         addEventListener(MouseEvent.MOUSE_DOWN,this.slsAnyMouseDown,true,0,true);
+         dispatchEvent(new GameEvent(GameEvent.CALL,"OnBreakPoint",["SLS|ready"]));
+      }
+
+      // the script's state: one object per box {label:String, lit:Boolean}
+      protected function slsHandleBoxes(param1:Object, param2:int = -1) : void
+      {
+         this.slsData = param1 as Array;
+         this.slsBuild();
+      }
+
+      protected function slsTextFormat() : TextFormat
+      {
+         var _loc1_:TextFormat = new TextFormat("$NormalFont");
+         _loc1_.size = SLS_FONT_SIZE;
+         _loc1_.align = "center";
+         return _loc1_;
+      }
+
+      // a name too long for its box gets a smaller size until it fits (the Skyrim SLS 1.0.2 fix), down to 14
+      protected function slsFit(param1:TextField) : void
+      {
+         var _loc2_:TextFormat = this.slsTextFormat();
+         var _loc3_:int = SLS_FONT_SIZE;
+         param1.setTextFormat(_loc2_);
+         while(param1.textWidth > SLS_W - 18 && _loc3_ > 14)
+         {
+            _loc3_--;
+            _loc2_.size = _loc3_;
+            param1.setTextFormat(_loc2_);
+         }
+         param1.y = (SLS_H - param1.textHeight) / 2 - 2;
+      }
+
+      protected function slsBuild() : void
+      {
+         var _loc1_:int = 0;
+         var _loc2_:Sprite = null;
+         var _loc3_:TextField = null;
+         while(this.slsLayer.numChildren > 0)
+         {
+            this.slsLayer.removeChildAt(0);
+         }
+         this.slsBoxes = [];
+         if(!this.slsData)
+         {
+            return;
+         }
+         _loc1_ = 0;
+         while(_loc1_ < this.slsData.length)
+         {
+            _loc2_ = new Sprite();
+            _loc2_.y = _loc1_ * (SLS_H + SLS_GAP);
+            _loc2_.buttonMode = true;
+            _loc2_.mouseChildren = false;
+            _loc3_ = new TextField();
+            _loc3_.defaultTextFormat = this.slsTextFormat();
+            _loc3_.embedFonts = true;
+            _loc3_.selectable = false;
+            _loc3_.mouseEnabled = false;
+            _loc3_.width = SLS_W - 12;
+            _loc3_.height = SLS_H - 10;
+            _loc3_.x = 6;
+            _loc3_.y = (SLS_H - SLS_FONT_SIZE - 8) / 2;
+            _loc3_.name = "slsText";
+            _loc2_.addChild(_loc3_);
+            _loc2_.name = "slsBox" + _loc1_;
+            _loc2_.addEventListener(MouseEvent.CLICK,this.slsClicked,false,0,true);
+            _loc2_.addEventListener(MouseEvent.MOUSE_OVER,this.slsMouseOver,false,0,true);
+            _loc2_.addEventListener(MouseEvent.MOUSE_OUT,this.slsMouseOut,false,0,true);
+            this.slsLayer.addChild(_loc2_);
+            this.slsBoxes.push(_loc2_);
+            _loc1_++;
+         }
+         if(this.slsCursor >= this.slsBoxes.length)
+         {
+            this.slsCursor = this.slsBoxes.length - 1;
+         }
+         if(this.slsCursor < 0)
+         {
+            this.slsCursor = 0;
+         }
+         this.slsDraw();
+      }
+
+      // The game's frame: a thin outer line and an inner line whose corners step in (the shape the game draws round
+      // its own menu entries; AMF Witcher 3 and the Skellige MO2 theme use the same one).
+      protected function slsFrame(param1:Sprite, param2:uint, param3:Number) : void
+      {
+         var _loc4_:Number = 4;
+         var _loc5_:Number = 5;
+         var _loc6_:Number = SLS_W - 4;
+         var _loc7_:Number = SLS_H - 4;
+         param1.graphics.lineStyle(1,param2,param3);
+         param1.graphics.drawRect(0,0,SLS_W,SLS_H);
+         param1.graphics.moveTo(_loc4_ + _loc5_,_loc4_);
+         param1.graphics.lineTo(_loc6_ - _loc5_,_loc4_);
+         param1.graphics.lineTo(_loc6_ - _loc5_,_loc4_ + _loc5_);
+         param1.graphics.lineTo(_loc6_,_loc4_ + _loc5_);
+         param1.graphics.lineTo(_loc6_,_loc7_ - _loc5_);
+         param1.graphics.lineTo(_loc6_ - _loc5_,_loc7_ - _loc5_);
+         param1.graphics.lineTo(_loc6_ - _loc5_,_loc7_);
+         param1.graphics.lineTo(_loc4_ + _loc5_,_loc7_);
+         param1.graphics.lineTo(_loc4_ + _loc5_,_loc7_ - _loc5_);
+         param1.graphics.lineTo(_loc4_,_loc7_ - _loc5_);
+         param1.graphics.lineTo(_loc4_,_loc4_ + _loc5_);
+         param1.graphics.lineTo(_loc4_ + _loc5_,_loc4_ + _loc5_);
+         param1.graphics.lineTo(_loc4_ + _loc5_,_loc4_);
+      }
+
+      protected function slsDraw() : void
+      {
+         var _loc1_:int = 0;
+         var _loc2_:Sprite = null;
+         var _loc3_:TextField = null;
+         var _loc4_:Object = null;
+         var _loc5_:Boolean = false;
+         var _loc6_:Boolean = false;
+         _loc1_ = 0;
+         while(_loc1_ < this.slsBoxes.length)
+         {
+            _loc2_ = this.slsBoxes[_loc1_] as Sprite;
+            _loc4_ = this.slsData && _loc1_ < this.slsData.length ? this.slsData[_loc1_] : null;
+            _loc5_ = Boolean(_loc4_) && Boolean(_loc4_.lit);
+            _loc6_ = this.slsFocused && _loc1_ == this.slsCursor || _loc1_ == this.slsHover;
+            _loc2_.graphics.clear();
+            _loc2_.graphics.beginFill(0x000000,_loc6_ ? 0.75 : 0.55);
+            _loc2_.graphics.drawRect(0,0,SLS_W,SLS_H);
+            _loc2_.graphics.endFill();
+            if(_loc6_)
+            {
+               this.slsFrame(_loc2_,0xFFFFFF,0.95);
+            }
+            else
+            {
+               _loc2_.graphics.lineStyle(1,_loc5_ ? SLS_LIT : SLS_LINE,_loc5_ ? 0.9 : 0.55);
+               _loc2_.graphics.drawRect(0,0,SLS_W,SLS_H);
+            }
+            _loc3_ = _loc2_.getChildByName("slsText") as TextField;
+            if(_loc3_)
+            {
+               _loc3_.text = _loc4_ ? String(_loc4_.label) : "";
+               this.slsFit(_loc3_);
+               _loc3_.textColor = _loc5_ ? SLS_LIT : SLS_TEXT;
+            }
+            _loc1_++;
+         }
+      }
+
+      // shown only on the player's own inventory with the paperdoll (not in a shop, container, stash or horse view)
+      protected function slsEnterFrame(param1:Event) : void
+      {
+         var _loc2_:Boolean = this._inventoryMode == IMS_Player && !this._filteringMode && Boolean(this.mcPaperDollModule) && this.mcPaperDollModule.visible && this.slsBoxes.length > 0;
+         if(_loc2_ != this.slsShown)
+         {
+            this.slsShown = _loc2_;
+            this.slsLayer.visible = _loc2_;
+            if(!_loc2_ && this.slsFocused)
+            {
+               this.slsLeave(0);
+            }
+         }
+      }
+
+      protected function slsCurrentModule() : Object
+      {
+         var _loc1_:int = currentModuleIdx;
+         if(_loc1_ >= 0 && _loc1_ < actualModules.length)
+         {
+            return actualModules[_loc1_];
+         }
+         return null;
+      }
+
+      protected function slsEnter() : void
+      {
+         var _loc1_:Object = this.slsCurrentModule();
+         this.slsHadModule = _loc1_;
+         if(_loc1_)
+         {
+            _loc1_.focused = 0;
+         }
+         this.slsFocused = true;
+         this.slsHover = -1;
+         this.slsCursor = this.slsActiveIndex();
+         if(this.slsFeedbackId == -1)
+         {
+            this.slsFeedbackId = InputFeedbackManager.appendButton(this,NavigationCode.GAMEPAD_A,KeyCode.E,"sls_select_loadout");
+         }
+         this.slsSound("gui_global_highlight");
+         this.slsDraw();
+      }
+
+      // param1: -1 back to the module the column was entered from (the grid), 1 on to the next module (the paperdoll),
+      // 0 just let go (the column was hidden)
+      protected function slsLeave(param1:int) : void
+      {
+         var _loc2_:Object = this.slsHadModule;
+         this.slsFocused = false;
+         this.slsHadModule = null;
+         if(this.slsFeedbackId != -1)
+         {
+            InputFeedbackManager.removeButton(this,this.slsFeedbackId);
+            this.slsFeedbackId = -1;
+         }
+         this.slsDraw();
+         if(param1 > 0 && _loc2_ == this.mcPlayerInventory)
+         {
+            currentModuleIdx = currentModuleIdx + 1;
+            return;
+         }
+         if(param1 < 0 && _loc2_ == this.mcPaperDollModule)
+         {
+            currentModuleIdx = currentModuleIdx - 1;
+            return;
+         }
+         if(_loc2_)
+         {
+            _loc2_.focused = 1;
+         }
+      }
+
+      protected function slsActiveIndex() : int
+      {
+         var _loc1_:int = 0;
+         if(this.slsData)
+         {
+            while(_loc1_ < this.slsData.length)
+            {
+               if(this.slsData[_loc1_] && this.slsData[_loc1_].lit)
+               {
+                  return _loc1_;
+               }
+               _loc1_++;
+            }
+         }
+         return 0;
+      }
+
+      protected function slsSound(param1:String) : void
+      {
+         dispatchEvent(new GameEvent(GameEvent.CALL,"OnPlaySoundEvent",[param1]));
+      }
+
+      protected function slsActivate(param1:int) : void
+      {
+         if(param1 < 0 || param1 >= this.slsBoxes.length)
+         {
+            return;
+         }
+         this.slsSound("gui_global_switch");
+         dispatchEvent(new GameEvent(GameEvent.CALL,"OnBreakPoint",["SLS|activate|" + param1]));
+      }
+
+      // true when the press was the column's
+      protected function slsHandleInput(param1:InputEvent) : Boolean
+      {
+         var _loc2_:InputDetails = param1.details;
+         var _loc3_:Boolean = _loc2_.value == InputValue.KEY_DOWN || _loc2_.value == InputValue.KEY_HOLD;
+         var _loc4_:Boolean = _loc2_.value == InputValue.KEY_UP;
+         var _loc5_:Object = null;
+         var _loc6_:Boolean = _loc2_.navEquivalent == NavigationCode.GAMEPAD_A || _loc2_.code == KeyCode.E || _loc2_.code == KeyCode.ENTER;
+         if(!this.slsShown)
+         {
+            return false;
+         }
+         if(!this.slsFocused)
+         {
+            if(param1.handled || !_loc3_)
+            {
+               return false;
+            }
+            _loc5_ = this.slsCurrentModule();
+            if(_loc2_.navEquivalent == NavigationCode.RIGHT && _loc5_ == this.mcPlayerInventory || _loc2_.navEquivalent == NavigationCode.LEFT && _loc5_ == this.mcPaperDollModule)
+            {
+               this.slsEnter();
+               param1.handled = true;
+               return true;
+            }
+            return false;
+         }
+         if(_loc2_.navEquivalent == NavigationCode.GAMEPAD_B || _loc2_.code == KeyCode.ESCAPE)
+         {
+            return false;
+         }
+         if(_loc3_)
+         {
+            switch(_loc2_.navEquivalent)
+            {
+               case NavigationCode.UP:
+                  if(this.slsCursor > 0)
+                  {
+                     --this.slsCursor;
+                     this.slsSound("gui_global_highlight");
+                     this.slsDraw();
+                  }
+                  break;
+               case NavigationCode.DOWN:
+                  if(this.slsCursor < this.slsBoxes.length - 1)
+                  {
+                     ++this.slsCursor;
+                     this.slsSound("gui_global_highlight");
+                     this.slsDraw();
+                  }
+                  break;
+               case NavigationCode.LEFT:
+                  if(_loc2_.value == InputValue.KEY_DOWN)
+                  {
+                     this.slsLeave(-1);
+                  }
+                  break;
+               case NavigationCode.RIGHT:
+                  if(_loc2_.value == InputValue.KEY_DOWN)
+                  {
+                     this.slsLeave(1);
+                  }
+            }
+         }
+         if(_loc4_ && _loc6_)
+         {
+            this.slsActivate(this.slsCursor);
+         }
+         param1.handled = true;
+         param1.stopImmediatePropagation();
+         return true;
+      }
+
+      protected function slsBoxIndex(param1:Object) : int
+      {
+         return this.slsBoxes.indexOf(param1);
+      }
+
+      protected function slsClicked(param1:MouseEvent) : void
+      {
+         var _loc2_:int = this.slsBoxIndex(param1.currentTarget);
+         if(_loc2_ >= 0)
+         {
+            this.slsCursor = _loc2_;
+            this.slsActivate(_loc2_);
+         }
+      }
+
+      protected function slsMouseOver(param1:MouseEvent) : void
+      {
+         this.slsHover = this.slsBoxIndex(param1.currentTarget);
+         this.slsDraw();
+      }
+
+      protected function slsMouseOut(param1:MouseEvent) : void
+      {
+         this.slsHover = -1;
+         this.slsDraw();
+      }
+
+      // a click anywhere outside the column gives the focus back, so the module it was taken from is never left
+      // unfocused (the menu moves module focus with the mouse on its own)
+      protected function slsAnyMouseDown(param1:MouseEvent) : void
+      {
+         if(this.slsFocused && !(param1.target is DisplayObject && this.slsLayer.contains(param1.target as DisplayObject)))
+         {
+            this.slsLeave(0);
+         }
+      }
