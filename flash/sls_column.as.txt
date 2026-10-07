@@ -36,6 +36,7 @@
       protected var slsFeedbackId:int = -1;
       protected var slsShown:Boolean = false;
       protected var slsStageHooked:Boolean = false;
+      protected var slsStatsUp:Boolean = false;   // the character stats page (RT) is over the inventory - the script says so
 
       protected function slsInit() : void
       {
@@ -45,10 +46,18 @@
          this.slsLayer.visible = false;
          addChild(this.slsLayer);
          dispatchEvent(new GameEvent(GameEvent.REGISTER,"inventory.sls.boxes",[this.slsHandleBoxes]));
+         dispatchEvent(new GameEvent(GameEvent.REGISTER,"inventory.sls.statsUp",[this.slsHandleStats]));
          addEventListener(Event.ENTER_FRAME,this.slsEnterFrame,false,0,true);
          addEventListener(MouseEvent.MOUSE_DOWN,this.slsAnyMouseDown,true,0,true);
          this.slsHookStage();
          dispatchEvent(new GameEvent(GameEvent.CALL,"OnBreakPoint",["SLS|ready"]));
+      }
+
+      // the stats page (RT) opened or closed: the script hears it from the menu (OnPlayerStatsShown / OnPlayerStatsHidden)
+      // and the column steps aside while it is up (the owner, 2026-10-07: the boxes stayed over the stats page)
+      protected function slsHandleStats(param1:Object, param2:int = -1) : void
+      {
+         this.slsStatsUp = Boolean(param1);
       }
 
       // the script's state: one object per box {label:String, lit:Boolean}
@@ -221,11 +230,12 @@
          }
       }
 
-      // shown only on the player's own inventory with the paperdoll (not in a shop, container, stash or horse view)
+      // shown only on the player's own inventory with the paperdoll (not in a shop, container, stash or horse view), and not
+      // while the character stats page is up
       protected function slsEnterFrame(param1:Event) : void
       {
          this.slsHookStage();
-         var _loc2_:Boolean = this._inventoryMode == IMS_Player && !this._filteringMode && Boolean(this.mcPaperDollModule) && this.mcPaperDollModule.visible && this.slsBoxes.length > 0;
+         var _loc2_:Boolean = this._inventoryMode == IMS_Player && !this._filteringMode && Boolean(this.mcPaperDollModule) && this.mcPaperDollModule.visible && !this.slsStatsUp && this.slsBoxes.length > 0;
          if(_loc2_ != this.slsShown)
          {
             this.slsShown = _loc2_;

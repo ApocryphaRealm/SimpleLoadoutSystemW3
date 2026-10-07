@@ -9,6 +9,11 @@ Versions are issued by the project's version gate. Written as the change happens
   Framework made up a name for the mod from "sls_menu" (the owner saw "SLs"), and the game's own Options > Mods would
   have shown `##panel_sls_menu`. The tables now carry `panel_sls_menu` ("Simple Loadout System"),
   `option_sls_menu_count` and `preset_value_sls_count_1..4` in all 18 language files; the bare keys stay for the script.
+* **Fixed: the loadout boxes stayed over the character stats page** (RT in the inventory; the owner, 2026-10-07). The
+  menu's own OnPlayerStatsShown / OnPlayerStatsHidden are wrapped: the column steps aside (and gives up the pad's focus)
+  while the stats page is up and comes back with the items, told through a new "inventory.sls.statsUp" binding.
+* **Fixed: "no flash value storage yet" on every inventory open.** The movie's request can come before the base menu
+  sets its value storage; the script now fetches it itself (GetMenuFlashValueStorage, as the base menu does).
 
 ## 1.0.0 - first build (2026-10-06)
 

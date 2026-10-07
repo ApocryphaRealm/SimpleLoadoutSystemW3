@@ -386,6 +386,64 @@ function OnInputHandled(NavCode : string, KeyCode : int, ActionId : int)
 	}
 }
 
+// THE STATS PAGE (RT) - the owner, 2026-10-07: the loadout boxes stayed visible over the character stats page. The menu
+// hears the page open and close (OnPlayerStatsShown / OnPlayerStatsHidden, where it also turns the grid's context off and
+// on); the column is told through the "inventory.sls.statsUp" binding and steps aside, and gives up the pad's focus.
+// Event wrappers: no early return (logic library, AMF Witcher 3).
+@addField(CR4InventoryMenu)
+var slsStatsUp : bool;
+
+@wrapMethod(CR4InventoryMenu)
+function OnPlayerStatsShown()
+{
+	var r : bool;
+
+	r = wrappedMethod();
+	slsStatsUp = true;
+	SLS_SetColumnFocus(false);
+	SLS_PushStats();
+	SLS_Log("stats page up: the column steps aside");
+	return r;
+}
+
+@wrapMethod(CR4InventoryMenu)
+function OnPlayerStatsHidden()
+{
+	var r : bool;
+
+	r = wrappedMethod();
+	slsStatsUp = false;
+	SLS_PushStats();
+	SLS_Log("stats page closed: the column is back");
+	return r;
+}
+
+@addMethod(CR4InventoryMenu)
+function SLS_PushStats()
+{
+	if (SLS_Storage())
+	{
+		m_flashValueStorage.SetFlashBool("inventory.sls.statsUp", slsStatsUp);
+	}
+}
+
+// The menu's value storage. CR4MenuBase sets m_flashValueStorage in its own OnConfigUI; the movie's "SLS|ready" can
+// arrive before that (the log said "no flash value storage yet" on every inventory open, 2026-10-07), so it is fetched
+// here when it is not set yet - the same call the base menu makes.
+@addMethod(CR4InventoryMenu)
+function SLS_Storage() : bool
+{
+	if (!m_flashValueStorage)
+	{
+		m_flashValueStorage = GetMenuFlashValueStorage();
+	}
+	if (m_flashValueStorage)
+	{
+		return true;
+	}
+	return false;
+}
+
 // The column's boxes: the loadouts, then "Always worn"; the active one lit.
 @addMethod(CR4InventoryMenu)
 function SLS_PushBoxes()
@@ -394,7 +452,7 @@ function SLS_PushBoxes()
 	var box : CScriptedFlashObject;
 	var active, count, i : int;
 
-	if (!m_flashValueStorage)
+	if (!SLS_Storage())
 	{
 		SLS_Log("no flash value storage yet - the column stays empty until it asks again");
 		return;
@@ -414,6 +472,7 @@ function SLS_PushBoxes()
 	box.SetMemberFlashBool("lit", active == -2);
 	boxes.PushBackFlashObject(box);
 	m_flashValueStorage.SetFlashArray("inventory.sls.boxes", boxes);
+	m_flashValueStorage.SetFlashBool("inventory.sls.statsUp", slsStatsUp);
 }
 
 // A box was activated with A (or clicked). The switch runs here and only here.
