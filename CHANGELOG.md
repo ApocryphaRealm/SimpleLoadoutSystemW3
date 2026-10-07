@@ -2,7 +2,15 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## Unreleased - first build (2026-10-06)
+## 1.0.1 - 2026-10-07 - untested
+
+* **Fixed: the settings menu's labels.** The menu looks its labels up with prefixes (`panel_` for the group, `option_` for
+  the setting, `preset_value_` for each choice), and the string tables only held the bare keys. So Apocrypha Menu
+  Framework made up a name for the mod from "sls_menu" (the owner saw "SLs"), and the game's own Options > Mods would
+  have shown `##panel_sls_menu`. The tables now carry `panel_sls_menu` ("Simple Loadout System"),
+  `option_sls_menu_count` and `preset_value_sls_count_1..4` in all 18 language files; the bare keys stay for the script.
+
+## 1.0.0 - first build (2026-10-06)
 
 The owner, 2026-10-06: *"start building the simple loadout system. I want four or five buttons to be positioned
 vertically in between the armor area and the equip slots, which can be navigated to with the controller. The same

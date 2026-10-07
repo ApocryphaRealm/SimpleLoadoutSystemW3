@@ -59,7 +59,21 @@ NEAR = {"esmx": "es"}
 def rows_for(lang):
     texts = TEXT.get(lang) or TEXT.get(NEAR.get(lang, "")) or TEXT["en"]
     assert len(texts) == len(KEYS), lang
-    return [(ID_BASE + i + 1, key, texts[i]) for i, key in enumerate(KEYS)]
+    rows = [(ID_BASE + i + 1, key, texts[i]) for i, key in enumerate(KEYS)]
+    # The settings menu looks its labels up with prefixes (igmOptions.ws: "panel_" + each group segment, "option_" + a
+    # var's displayName, "preset_value_" + an option's displayName; Apocrypha Menu Framework reads them the same way).
+    # The bare keys alone left the group unnamed: AMF made "SLs"-like names from "sls_menu" and the game's own Options >
+    # Mods would show "##panel_sls_menu" (the owner, 2026-10-07). The bare keys stay - the script reads sls_loadout etc.
+    by_key = dict(zip(KEYS, texts))
+    for j, (key, src) in enumerate(MENU_KEYS):
+        rows.append((ID_BASE + 50 + j, key, by_key[src]))
+    return rows
+
+
+# the menu's prefixed keys (SimpleLoadoutSystem.xml) -> the text they show
+MENU_KEYS = [("panel_sls_menu", "sls_menu"), ("option_sls_menu_count", "sls_menu_count"),
+             ("preset_value_sls_count_1", "sls_count_1"), ("preset_value_sls_count_2", "sls_count_2"),
+             ("preset_value_sls_count_3", "sls_count_3"), ("preset_value_sls_count_4", "sls_count_4")]
 
 
 def game_languages():
@@ -90,7 +104,7 @@ def main():
     if problems:
         print("\n".join(problems))
         sys.exit(1)
-    print(f"ok    {len(game_languages())} language files, {len(KEYS)} strings each")
+    print(f"ok    {len(game_languages())} language files, {len(KEYS) + len(MENU_KEYS)} strings each")
 
 
 if __name__ == "__main__":
