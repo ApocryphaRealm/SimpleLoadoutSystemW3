@@ -12,6 +12,10 @@ Versions are issued by the project's version gate. Written as the change happens
 * **Fixed: the loadout boxes stayed over the character stats page** (RT in the inventory; the owner, 2026-10-07). The
   menu's own OnPlayerStatsShown / OnPlayerStatsHidden are wrapped: the column steps aside (and gives up the pad's focus)
   while the stats page is up and comes back with the items, told through a new "inventory.sls.statsUp" binding.
+  Then (the owner: the buttons went too late; "look into how the inventory hides its own armor and weapons sections"):
+  the column is one of the menu's own fade-out sections now (CharacterRendererController.addFadeOutComponent, the same
+  0.5 s Sine.easeOut alpha tween as the item grid and the paperdoll, in the same frame), and the renderer's
+  ACTIVATE / DEACTIVATE stop and give back its input at once; the script's flag is only a backstop.
 * **Fixed: "no flash value storage yet" on every inventory open.** The movie's request can come before the base menu
   sets its value storage; the script now fetches it itself (GetMenuFlashValueStorage, as the base menu does).
 

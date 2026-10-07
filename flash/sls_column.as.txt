@@ -36,7 +36,7 @@
       protected var slsFeedbackId:int = -1;
       protected var slsShown:Boolean = false;
       protected var slsStageHooked:Boolean = false;
-      protected var slsStatsUp:Boolean = false;   // the character stats page (RT) is over the inventory - the script says so
+      protected var slsStatsUp:Boolean = false;   // the character stats page (RT) is over the inventory
 
       protected function slsInit() : void
       {
@@ -47,6 +47,21 @@
          addChild(this.slsLayer);
          dispatchEvent(new GameEvent(GameEvent.REGISTER,"inventory.sls.boxes",[this.slsHandleBoxes]));
          dispatchEvent(new GameEvent(GameEvent.REGISTER,"inventory.sls.statsUp",[this.slsHandleStats]));
+         // THE STATS PAGE, the game's own way (the owner, 2026-10-07: "look into how the inventory hides its own armor and
+         // weapons sections when going into the stats menu"): the menu hands its sections - the item grid, the paperdoll,
+         // the vitality / toxicity bars, the sort buttons - to its CharacterRendererController, which tweens each to alpha 0
+         // (0.5 s, Sine.easeOut) in the frame the stats page opens and back to 1 when it closes. The column is one of them
+         // now, so it fades with them; the renderer's own ACTIVATE / DEACTIVATE (the same events the menu listens to) stop
+         // its input at once. The script's "inventory.sls.statsUp" stays as a backstop for the input only.
+         if(this._rendererController)
+         {
+            this._rendererController.addFadeOutComponent(this.slsLayer);
+         }
+         if(this.mcCharacterRenderer)
+         {
+            this.mcCharacterRenderer.addEventListener(Event.ACTIVATE,this.slsStatsShown,false,0,true);
+            this.mcCharacterRenderer.addEventListener(Event.DEACTIVATE,this.slsStatsHidden,false,0,true);
+         }
          addEventListener(Event.ENTER_FRAME,this.slsEnterFrame,false,0,true);
          addEventListener(MouseEvent.MOUSE_DOWN,this.slsAnyMouseDown,true,0,true);
          this.slsHookStage();
@@ -57,7 +72,29 @@
       // and the column steps aside while it is up (the owner, 2026-10-07: the boxes stayed over the stats page)
       protected function slsHandleStats(param1:Object, param2:int = -1) : void
       {
-         this.slsStatsUp = Boolean(param1);
+         if(Boolean(param1))
+         {
+            this.slsStatsShown(null);
+         }
+         else
+         {
+            this.slsStatsHidden(null);
+         }
+      }
+
+      protected function slsStatsShown(param1:Event) : void
+      {
+         this.slsStatsUp = true;
+         this.slsHover = -1;
+         if(this.slsFocused)
+         {
+            this.slsLeave(0);
+         }
+      }
+
+      protected function slsStatsHidden(param1:Event) : void
+      {
+         this.slsStatsUp = false;
       }
 
       // the script's state: one object per box {label:String, lit:Boolean}
@@ -230,12 +267,12 @@
          }
       }
 
-      // shown only on the player's own inventory with the paperdoll (not in a shop, container, stash or horse view), and not
-      // while the character stats page is up
+      // shown only on the player's own inventory with the paperdoll (not in a shop, container, stash or horse view); the
+      // stats page fades it with the menu's own sections (slsInit)
       protected function slsEnterFrame(param1:Event) : void
       {
          this.slsHookStage();
-         var _loc2_:Boolean = this._inventoryMode == IMS_Player && !this._filteringMode && Boolean(this.mcPaperDollModule) && this.mcPaperDollModule.visible && !this.slsStatsUp && this.slsBoxes.length > 0;
+         var _loc2_:Boolean = this._inventoryMode == IMS_Player && !this._filteringMode && Boolean(this.mcPaperDollModule) && this.mcPaperDollModule.visible && this.slsBoxes.length > 0;
          if(_loc2_ != this.slsShown)
          {
             this.slsShown = _loc2_;
@@ -259,6 +296,10 @@
 
       protected function slsEnter() : void
       {
+         if(this.slsStatsUp)
+         {
+            return;
+         }
          var _loc1_:Object = this.slsCurrentModule();
          this.slsHadModule = _loc1_;
          if(_loc1_)
@@ -435,7 +476,7 @@
       protected function slsClicked(param1:MouseEvent) : void
       {
          var _loc2_:int = this.slsBoxIndex(param1.currentTarget);
-         if(_loc2_ >= 0)
+         if(_loc2_ >= 0 && !this.slsStatsUp)
          {
             this.slsCursor = _loc2_;
             this.slsActivate(_loc2_);
