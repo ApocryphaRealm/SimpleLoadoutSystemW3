@@ -331,6 +331,12 @@ function SLS_OnMovie(text : string)
 		SLS_Press(box);
 		return;
 	}
+	// the column caught an error of its own and switched itself off for this menu; the inventory carries on without it
+	if (StrBeginsWith(text, "SLS|error|"))
+	{
+		SLS_Log("ERROR in the loadout column - it is off until the inventory is opened again (the inventory itself works): " + StrAfterFirst(text, "SLS|error|"));
+		return;
+	}
 	SLS_Log("unknown message from the column: " + text);
 }
 

@@ -28,7 +28,10 @@
 
       protected var slsBoxes:Array = [];
       protected var slsData:Array = null;
-      protected var slsLayer:Sprite = null;
+      // a MovieClip, not a Sprite: the renderer's fade list is a Vector.<MovieClip>, and a Sprite pushed into it threw
+      // TypeError #1034 in the menu's start-up (1.0.1's first build: the inventory never got its OnConfigUI, so the grid
+      // stayed empty and the character preview read MISSING PICTURE - the owner's game, 2026-10-13)
+      protected var slsLayer:MovieClip = null;
       protected var slsCursor:int = 0;
       protected var slsFocused:Boolean = false;
       protected var slsHover:int = -1;
@@ -37,10 +40,77 @@
       protected var slsShown:Boolean = false;
       protected var slsStageHooked:Boolean = false;
       protected var slsStatsUp:Boolean = false;   // the character stats page (RT) is over the inventory
+      protected var slsOff:Boolean = false;       // the column failed and is off for this menu; the inventory carries on
+
+      // THE COLUMN CAN NEVER TAKE THE INVENTORY DOWN. slsSafeInit runs from configUI AFTER the menu has told the game it
+      // is ready (dispatchEvent "OnConfigUI" - the call that makes the game fill the grid and the character preview), never
+      // before it, and every error in the column's start-up or input is caught here: the column switches itself off for
+      // this menu, the error goes to the script's log ("SLS|error|..." on the SimpleLoadoutSystem channel) and the
+      // inventory works as if the mod were not there.
+      protected function slsSafeInit() : void
+      {
+         try
+         {
+            this.slsInit();
+         }
+         catch(e:Error)
+         {
+            this.slsFail("init",e);
+         }
+      }
+
+      // the menu's own handleInputNavigate asks the column first; an error there must not stop the menu's navigation
+      protected function slsSafeHandleInput(param1:InputEvent) : Boolean
+      {
+         if(this.slsOff)
+         {
+            return false;
+         }
+         try
+         {
+            return this.slsHandleInput(param1);
+         }
+         catch(e:Error)
+         {
+            this.slsFail("input",e);
+         }
+         return false;
+      }
+
+      protected function slsFail(param1:String, param2:Error) : void
+      {
+         this.slsOff = true;
+         try
+         {
+            this.slsFocused = false;
+            this.slsShown = false;
+            removeEventListener(Event.ENTER_FRAME,this.slsEnterFrame);
+            if(this.slsLayer)
+            {
+               this.slsLayer.visible = false;
+               this.slsLayer.mouseEnabled = false;
+               this.slsLayer.mouseChildren = false;
+            }
+            if(_contextMgr)
+            {
+               _contextMgr.blockTooltips(false);
+            }
+         }
+         catch(e2:Error)
+         {
+         }
+         try
+         {
+            dispatchEvent(new GameEvent(GameEvent.CALL,"OnBreakPoint",["SLS|error|" + param1 + "|" + (param2 ? param2.errorID + " " + param2.message : "?")]));
+         }
+         catch(e3:Error)
+         {
+         }
+      }
 
       protected function slsInit() : void
       {
-         this.slsLayer = new Sprite();
+         this.slsLayer = new MovieClip();
          this.slsLayer.x = SLS_X;
          this.slsLayer.y = SLS_Y;
          this.slsLayer.visible = false;
@@ -100,8 +170,19 @@
       // the script's state: one object per box {label:String, lit:Boolean}
       protected function slsHandleBoxes(param1:Object, param2:int = -1) : void
       {
-         this.slsData = param1 as Array;
-         this.slsBuild();
+         if(this.slsOff)
+         {
+            return;
+         }
+         try
+         {
+            this.slsData = param1 as Array;
+            this.slsBuild();
+         }
+         catch(e:Error)
+         {
+            this.slsFail("boxes",e);
+         }
       }
 
       protected function slsTextFormat() : TextFormat
@@ -261,15 +342,31 @@
 
       protected function slsStageInput(param1:InputEvent) : void
       {
-         if(this.slsFocused && !param1.handled)
+         if(this.slsFocused && !param1.handled && !this.slsOff)
          {
-            this.slsHandleInput(param1);
+            this.slsSafeHandleInput(param1);
          }
       }
 
       // shown only on the player's own inventory with the paperdoll (not in a shop, container, stash or horse view); the
       // stats page fades it with the menu's own sections (slsInit)
       protected function slsEnterFrame(param1:Event) : void
+      {
+         if(this.slsOff)
+         {
+            return;
+         }
+         try
+         {
+            this.slsEnterFrameBody();
+         }
+         catch(e:Error)
+         {
+            this.slsFail("frame",e);
+         }
+      }
+
+      protected function slsEnterFrameBody() : void
       {
          this.slsHookStage();
          var _loc2_:Boolean = this._inventoryMode == IMS_Player && !this._filteringMode && Boolean(this.mcPaperDollModule) && this.mcPaperDollModule.visible && this.slsBoxes.length > 0;

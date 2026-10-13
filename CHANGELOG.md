@@ -16,6 +16,17 @@ Versions are issued by the project's version gate. Written as the change happens
   the column is one of the menu's own fade-out sections now (CharacterRendererController.addFadeOutComponent, the same
   0.5 s Sine.easeOut alpha tween as the item grid and the paperdoll, in the same frame), and the renderer's
   ACTIVATE / DEACTIVATE stop and give back its input at once; the script's flag is only a backstop.
+* **Fixed: the "stats page fade" build broke the whole inventory** (the owner's game, 2026-10-13: the right side one big
+  MISSING PICTURE box, the item grid empty; Witcher Gear Overhaul's "values (inventory)" line never logged). The column's
+  layer was a Sprite and the renderer's fade list is a `Vector.<MovieClip>`, so `addFadeOutComponent` threw in the menu's
+  start-up - and the column started up just BEFORE the menu tells the game it is ready (`OnConfigUI`), so that call never
+  went out: no grid, no character preview, no OnConfigUI for any other mod. Now the layer is a MovieClip (a valid fade
+  section, so the stats-page fade stays), the column starts AFTER `OnConfigUI`, and its start-up, input, per-frame and
+  data handlers are each wrapped: an error switches the column off for that menu, is logged on the SimpleLoadoutSystem
+  channel ("ERROR in the loadout column ..."), and the inventory works as if the mod were not there.
+* **Build: no build path in the movie.** REDkit's swfimport records the source .swf's absolute path in the .redswf
+  (editor-only, for re-import); `build_flash.py` now rewrites it to the bare file name and fixes every size, offset
+  and CRC after it, checking all of them before and after.
 * **Fixed: "no flash value storage yet" on every inventory open.** The movie's request can come before the base menu
   sets its value storage; the script now fetches it itself (GetMenuFlashValueStorage, as the base menu does).
 

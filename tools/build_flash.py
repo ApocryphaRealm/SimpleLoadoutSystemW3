@@ -22,9 +22,11 @@ import argparse
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import winreg
+import zlib
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD = os.path.join(REPO, "build", "flash")
@@ -42,10 +44,12 @@ DEPOT_OUT = "sls_build"   # a folder of ours inside REDkit's workspace, removed 
 HOOKS = [
     ("import flash.events.Event;\n",
      "import flash.events.MouseEvent;\n   import flash.text.TextFormat;\n   ", "before"),
-    ("         this.initDataBindings();\n",
-     "         this.slsInit();\n", "after"),
+    # AFTER the menu tells the game it is ready (OnConfigUI fills the grid and the character preview): nothing of ours may
+    # run before it - 1.0.1's first build put the column before it, the column threw, and the inventory stayed empty
+    ("         dispatchEvent(new GameEvent(GameEvent.CALL,\"OnConfigUI\"));\n",
+     "         this.slsSafeInit();\n", "after"),
     ("      override protected function handleInputNavigate(event:InputEvent) : void\n      {\n",
-     "         if(this.slsHandleInput(event))\n         {\n            return;\n         }\n", "after"),
+     "         if(this.slsSafeHandleInput(event))\n         {\n            return;\n         }\n", "after"),
 ]
 
 
@@ -92,6 +96,79 @@ def wcc(redkit, args, timeout=900):
         print("\n".join(errs))
         sys.exit(f"wcc_lite {args[0]} reported errors")
     return out
+
+
+def _crc(b):
+    return zlib.crc32(b) & 0xFFFFFFFF
+
+
+def _cr2w_check(d):
+    """Every CRC a W3 CR2W file carries, recomputed: the header (first 0xA0 bytes with the field set to 0xDEADBEEF),
+    each table's and each export's (plain CRC32). Returns the export table [(entry offset, size, data offset)]."""
+    if d[:4] != b"CR2W":
+        sys.exit("strip: not a CR2W file")
+    h = bytearray(d[:0xA0])
+    struct.pack_into("<I", h, 0x20, 0xDEADBEEF)
+    if _crc(bytes(h)) != struct.unpack_from("<I", d, 0x20)[0]:
+        sys.exit("strip: header CRC does not match the known recipe - format changed, not patching")
+    eo, ec, ecrc = struct.unpack_from("<III", d, 0x28 + 12 * 4)
+    if _crc(d[eo:eo + 24 * ec]) != ecrc:
+        sys.exit("strip: export table CRC mismatch - not patching")
+    exports = []
+    for k in range(ec):
+        e = eo + 24 * k
+        size, off, xcrc = struct.unpack_from("<I", d, e + 8)[0], struct.unpack_from("<I", d, e + 12)[0], struct.unpack_from("<I", d, e + 20)[0]
+        if _crc(d[off:off + size]) != xcrc:
+            sys.exit(f"strip: export {k} CRC mismatch - not patching")
+        exports.append((e, size, off))
+    return exports
+
+
+def strip_import_path(redswf):
+    """swfimport records the absolute path of the source .swf (the CSwfResource's import-file String property, the first
+    property of the first export) - our build folder. It is editor-only (REDkit's re-import); the game never reads it.
+    Rewrite it to the bare file name and fix every size, offset and CRC after it, then check the result again."""
+    d = bytearray(open(redswf, "rb").read())
+    exports = _cr2w_check(bytes(d))
+    e0, size0, off0 = exports[0]
+    p = off0 + 1                                    # export data starts with a zero byte, then the properties
+    name, typ, psize = struct.unpack_from("<HHI", d, p)
+    v = p + 8
+    b0, b1 = d[v], d[v + 1]
+    if not (b0 & 0x80 and b0 & 0x40 and not b1 & 0x80):
+        sys.exit("strip: first property is not a long ANSI string - not patching")
+    n = (b0 & 0x3F) | (b1 << 6)
+    old = bytes(d[v + 2:v + 2 + n])
+    # the property's size counts its own 4 bytes and the value, not the name and type before it
+    if psize != 4 + 2 + n or not re.match(rb"^[A-Za-z]:\\.*\.swf$", old):
+        sys.exit(f"strip: first property is not the import path ({old[:40]!r}) - not patching")
+    new = old.rsplit(b"\\", 1)[-1]
+    if len(new) > 0x3F:
+        sys.exit("strip: file name too long for a one-byte length")
+    prop = struct.pack("<HHI", name, typ, 4 + 1 + len(new)) + bytes([0x80 | len(new)]) + new
+    delta = (4 + psize) - len(prop)
+    d[p:p + 4 + psize] = prop
+    eo = struct.unpack_from("<I", d, 0x28 + 12 * 4)[0]
+    for k, (e, size, off) in enumerate(exports):
+        if k == 0:
+            struct.pack_into("<I", d, e + 8, size - delta)
+        elif off > off0:
+            struct.pack_into("<I", d, e + 12, off - delta)
+    for k, (e, size, off) in enumerate(exports):
+        size, off = struct.unpack_from("<I", d, e + 8)[0], struct.unpack_from("<I", d, e + 12)[0]
+        struct.pack_into("<I", d, e + 20, _crc(bytes(d[off:off + size])))
+    ec = len(exports)
+    struct.pack_into("<I", d, 0x28 + 12 * 4 + 8, _crc(bytes(d[eo:eo + 24 * ec])))
+    for o in (0x18, 0x1C):                          # file size, buffer size (equal: no external buffers)
+        struct.pack_into("<I", d, o, len(d))
+    h = bytearray(d[:0xA0])
+    struct.pack_into("<I", h, 0x20, 0xDEADBEEF)
+    struct.pack_into("<I", d, 0x20, _crc(bytes(h)))
+    _cr2w_check(bytes(d))
+    if re.search(rb"[A-Za-z]:\\", bytes(d[:off0 + 64])) or b"Claude" in d:
+        sys.exit("strip: a build path is still in the movie")
+    open(redswf, "wb").write(d)
+    print(f"ok    import path stripped ({old.decode('ascii', 'replace')[:3]}... -> {new.decode()})")
 
 
 def patch(text):
@@ -154,6 +231,7 @@ def main():
         unc = os.path.join(BUILD, "uncooked", SWF_DIR)
         os.makedirs(unc)
         shutil.copyfile(redswf, os.path.join(unc, SWF_NAME + ".redswf"))
+        strip_import_path(os.path.join(unc, SWF_NAME + ".redswf"))
     finally:
         shutil.rmtree(work, ignore_errors=True)
     os.makedirs(CONTENT, exist_ok=True)
