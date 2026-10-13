@@ -2,7 +2,7 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.1 - 2026-10-07 - untested
+## 1.0.1 - 2026-10-13 - working
 
 * **Fixed: the settings menu's labels.** The menu looks its labels up with prefixes (`panel_` for the group, `option_` for
   the setting, `preset_value_` for each choice), and the string tables only held the bare keys. So Apocrypha Menu
