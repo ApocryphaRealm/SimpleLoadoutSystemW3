@@ -21,12 +21,14 @@ OUT = os.path.join(REPO, "dist", "Mods", "modSimpleLoadoutSystem", "content")
 # game's own ids and the usual mod ranges.
 ID_BASE = 2117713000
 
-KEYS = ["sls_menu", "sls_menu_count", "sls_count_1", "sls_count_2", "sls_count_3", "sls_count_4", "sls_loadout",
-        "sls_always_worn", "sls_select_loadout", "sls_always_set", "sls_kept"]
+# 1.0.2: the Loadouts setting is a slider (1-10) and shows the number itself, so the list's choice labels sls_count_1..4
+# and their preset_value_ keys are gone.
+KEYS = ["sls_menu", "sls_menu_count", "sls_loadout", "sls_always_worn", "sls_select_loadout", "sls_always_set",
+        "sls_kept"]
 
-_N = ["1", "2", "3", "4"]
+_N = []
 
-# key order as KEYS: menu name, setting, 1-4, box word ("Loadout" + number), Always worn, the button hint, the two messages
+# key order as KEYS: menu name, setting, box word ("Loadout" + number), Always worn, the button hint, the two messages
 TEXT = {
     "en": ["Simple Loadout System", "Loadouts"] + _N + ["Loadout", "Always worn", "Select loadout",
            "Always worn pieces:", "Kept in your inventory (quest items):"],
@@ -71,9 +73,7 @@ def rows_for(lang):
 
 
 # the menu's prefixed keys (SimpleLoadoutSystem.xml) -> the text they show
-MENU_KEYS = [("panel_sls_menu", "sls_menu"), ("option_sls_menu_count", "sls_menu_count"),
-             ("preset_value_sls_count_1", "sls_count_1"), ("preset_value_sls_count_2", "sls_count_2"),
-             ("preset_value_sls_count_3", "sls_count_3"), ("preset_value_sls_count_4", "sls_count_4")]
+MENU_KEYS = [("panel_sls_menu", "sls_menu"), ("option_sls_menu_count", "sls_menu_count")]
 
 
 def game_languages():

@@ -2,6 +2,32 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
+## 1.0.2 - 2026-10-14 - untested
+
+The owner, 2026-10-14: *"I want 10 loadout slots"*, *"I want the always on button to be at the top of the loadout
+list"* and *"I want the AMF page for SLS to allow you to choose how many loadouts you want, up to 10."*
+
+* **Ten loadouts.** Loadout 1-10 (was 1-4). Each new loadout stores its gear in the stash the same way, with its own
+  tag (`SLS_L5` .. `SLS_L10`). The tags of loadouts 1-4 and the saved active-loadout fact are unchanged, so a save's
+  loadouts 1-4 and their gear carry over as they are.
+* **"Always worn" is at the top of the column**, above Loadout 1. Up/Down runs Always worn, Loadout 1, Loadout 2, ...
+* **The Loadouts setting is a slider, 1 to 10, one loadout per nudge** (Options > Mods > Simple Loadout System and the
+  same row on Apocrypha Menu Framework's page). It was a list of 4, 3, 2 and 1. The slider stores the count itself in
+  both menus. The default is 10. An empty value (never set) is written as 10 the first time it is read, so the slider
+  shows what the column shows. A count chosen before (1-4) is kept. Fewer loadouts only hide the higher boxes: the gear
+  stored in them stays in the stash and comes back with the boxes.
+* **A Loadouts change shows at once**, also while the inventory is open (AMF's page over it): the column asks the
+  script twice a second, and the script rebuilds it only when the count changed ("loadouts setting changed: 4 -> 10"
+  on the SimpleLoadoutSystem channel).
+* **The column fits eleven boxes.** Each box is 44 high with 8 between (was 50 and 10), at the same place: x 763, 160
+  wide, clear of the ARMOR grid's scroll bar (728-752) and the paperdoll's first slot frame (about 933), from y 232. The
+  full column (Always worn + ten loadouts) ends at y 796, beside the paperdoll's Bombs / Pockets row, above the sort
+  buttons' line (934) and the hint bar. The menu uses these units at every 16:9 resolution (1920x1080, 3200x1800).
+  Still one column; navigation in and out (left stick, D-pad, right stick Jump Sections) and the one-push fix are
+  unchanged.
+* **Strings:** the list's choice labels (`sls_count_1..4` and their `preset_value_` keys) are gone, since the slider
+  shows the number. "Loadout" + number is used for every box, so no new text was needed in the eleven languages.
+
 ## 1.0.1 - 2026-10-13 - working (the 'scroll bar + stick nav' build, 46261c4, tested in game by the owner 2026-10-13 ~23:00)
 
 * **Fixed: the loadout column covered the ARMOR grid's scroll bar** (the owner's screenshot, 2026-10-13). The column

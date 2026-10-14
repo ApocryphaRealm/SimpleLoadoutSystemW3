@@ -3,8 +3,9 @@
       // Inserted into the game's MenuInventory class by tools/build_flash.py (our code only; the class itself is read
       // from the player's REDkit at build time). The owner, 2026-10-06: "four or five buttons ... positioned vertically
       // in between the armor area and the equip slots, which can be navigated to with the controller. The same logic as
-      // the other SLS mods." Five boxes: the loadouts and "Always worn", in the empty strip between the item grid's
-      // ARMOR panel and the paperdoll's first slot column.
+      // the other SLS mods." "Always worn" at the top, then the loadouts (up to ten since 1.0.2 - the owner, 2026-10-14:
+      // "I want 10 loadout slots", "I want the always on button to be at the top of the loadout list"), in the empty
+      // strip between the item grid's ARMOR panel and the paperdoll's first slot column.
       //
       // Navigation joins the menu's own: the menu moves between its modules with a Left/Right (D-pad or left stick) or a
       // right-stick Left/Right ("Jump Sections") that a module did not use (CoreMenu.handleInputNavigate). Either one from
@@ -24,16 +25,23 @@
       // column (763-923) sits in the middle of that gap. 1.0.0/1.0.1 had x 724, width 186: the boxes covered the scroll bar
       // (the owner's screenshot, 2026-10-13) and took its mouse drags.
       protected static const SLS_X:Number = 763;
+      // y: eleven boxes (Always worn + ten loadouts) fit in one column at the old top (232): 1.0.2 makes each box 44 high
+      // with 8 between (1.0.1: 50 and 10), so the full column ends at y 796 - beside the paperdoll's Bombs / Pockets row,
+      // well above the sort buttons' line (934) and the hint bar (about 1005). Nothing else of the menu is in this strip,
+      // and the menu is laid out in these units at every 16:9 resolution (1920x1080 and 3200x1800 alike).
       protected static const SLS_Y:Number = 232;
       protected static const SLS_W:Number = 160;
-      protected static const SLS_H:Number = 50;
-      protected static const SLS_GAP:Number = 10;
+      protected static const SLS_H:Number = 44;
+      protected static const SLS_GAP:Number = 8;
       protected static const SLS_FONT_SIZE:int = 22;
       protected static const SLS_LINE:uint = 0x8C8C8C;
       protected static const SLS_TEXT:uint = 0xE6E1D6;
       protected static const SLS_LIT:uint = 0xE8C27A;
       // a sideways press this soon after the column took or gave up the focus belongs to the push that moved it
       protected static const SLS_SAME_PUSH_MS:int = 250;
+      // while the column is on screen it asks the script this often whether the Loadouts setting changed (Apocrypha Menu
+      // Framework's page can be open over the inventory); the script answers only when it did
+      protected static const SLS_POLL_MS:int = 500;
 
       protected var slsBoxes:Array = [];
       protected var slsData:Array = null;
@@ -51,6 +59,7 @@
       protected var slsStatsUp:Boolean = false;   // the character stats page (RT) is over the inventory
       protected var slsOff:Boolean = false;       // the column failed and is off for this menu; the inventory carries on
       protected var slsMovedAt:int = -100000;     // getTimer() when a sideways press last moved the focus into or out of the column
+      protected var slsPolledAt:int = 0;          // getTimer() of the last "SLS|poll"
 
       // THE COLUMN CAN NEVER TAKE THE INVENTORY DOWN. slsSafeInit runs from configUI AFTER the menu has told the game it
       // is ready (dispatchEvent "OnConfigUI" - the call that makes the game fill the grid and the character preview), never
@@ -440,6 +449,11 @@
             {
                this.slsLeave(0);
             }
+         }
+         if(this.slsShown && getTimer() - this.slsPolledAt >= SLS_POLL_MS)
+         {
+            this.slsPolledAt = getTimer();
+            dispatchEvent(new GameEvent(GameEvent.CALL,"OnBreakPoint",["SLS|poll"]));
          }
       }
 

@@ -4,7 +4,7 @@ Simple Loadout System (The Witcher 3: Wild Hunt - Remastered)
 Version 0.0.0
 
 Loadouts inside the game's inventory, built for the controller. A column of boxes sits between the item grid and the
-equipment slots: four loadouts and "Always worn". Pick a loadout and everything you equip while it is active becomes
+equipment slots: "Always worn" at the top, then up to ten loadouts. Pick a loadout and everything you equip while it is active becomes
 that loadout. Switch to another loadout - or back to none - and the gear you were wearing goes into that loadout's own
 storage, out of your inventory and your carry weight. Pick it again and it all comes back and is put on.
 
@@ -35,7 +35,9 @@ HOW IT WORKS
 
 SETTINGS
 Options > Mods > Simple Loadout System (also on the Apocrypha Menu Framework's Mods row):
-- Loadouts: how many loadout boxes the column shows (1-4, default 4). "Always worn" is always there.
+- Loadouts: how many loadout boxes the column shows - a slider, 1 to 10 (default 10). "Always worn" is always there,
+  at the top. Fewer loadouts only hides the higher boxes; the gear stored in them stays and is back when the boxes are.
+  A change made while the inventory is open shows in the column straight away.
 
 
 INSTALL

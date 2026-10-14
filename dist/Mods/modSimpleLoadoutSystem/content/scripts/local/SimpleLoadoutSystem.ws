@@ -2,7 +2,8 @@
 // Copyright (C) 2026 ApocryphaRealm. GPL-3.0-or-later (LICENSE, NOTICE.md).
 //
 // The loadout column is drawn by the inventory menu's own Flash (this mod's panel_inventory.redswf, built by
-// tools/build_flash.py): four loadout boxes and "Always worn", between the item grid and the paperdoll. A box's A press
+// tools/build_flash.py): "Always worn" at the top, then up to ten loadout boxes, between the item grid and the
+// paperdoll. A box's A press
 // reaches this script through the base menu's OnBreakPoint event, which the game uses only for a log line: the movie
 // sends "SLS|activate|<box>"; "SLS|ready" asks for the boxes' state. Only annotations here - no vanilla script is
 // replaced, so nothing needs merging.
@@ -22,27 +23,43 @@
 //
 // Storage: the shared stash - the horse manager's inventory, the one every stash in the world opens (inventoryMenu.ws:
 // IMS_Stash shows _horseInv). It follows Geralt to every region, is saved with the game and weighs nothing. A stored
-// piece carries its loadout's tag (SLS_L1..SLS_L4) and the game's own NoShowInContainer tag, which keeps it out of the
+// piece carries its loadout's tag (SLS_L1..SLS_L10) and the game's own NoShowInContainer tag, which keeps it out of the
 // stash's list (guiContainerInventoryComponent.ws ShouldShowItem). The active loadout is a fact (sls_active), saved
 // with the game.
 
 // ---- settings ----------------------------------------------------------------------------------------------------
 
+// Ten loadouts since 1.0.2 (the owner, 2026-10-14: "I want 10 loadout slots"); 1.0.0-1.0.1 had four. Their storage
+// tags (SLS_L1..SLS_L4) and the active-loadout fact are unchanged, so a save's loadouts 1-4 are still loadouts 1-4.
 function SLS_MaxLoadouts() : int
 {
-	return 4;
+	return 10;
 }
 
-// Options > Mods > Simple Loadout System > Loadouts (1-4, default 4). The column always ends with "Always worn".
-// The list's entries carry the count itself (SimpleLoadoutSystem.xml); no value yet means the default, which is the
-// list's first entry, so the menu and the column agree before anything was chosen.
+// Options > Mods > Simple Loadout System > Loadouts (and the same row on Apocrypha Menu Framework's page): a slider,
+// 1 to 10, one loadout per nudge (SimpleLoadoutSystem.xml SLIDER;1;10;9). The value is the count itself. The column
+// always starts with "Always worn". Default 10, the most there are: a value that is empty (never set) or not a count
+// 1-10 is written as 10 and saved, so the slider shows what the column shows. A count chosen before 1.0.2 (1-4, from
+// the old list) is kept as it is. Fewer loadouts only hides the higher boxes: their stored gear stays where it is.
 function SLS_Count() : int
 {
+	var cfg : CInGameConfigWrapper;
+	var raw : string;
 	var count : int;
 
-	count = StringToInt(theGame.GetInGameConfigWrapper().GetVarValue('SimpleLoadoutSystem', 'LoadoutCount'), -1);
+	cfg = theGame.GetInGameConfigWrapper();
+	if (!cfg)
+	{
+		return SLS_MaxLoadouts();
+	}
+	raw = cfg.GetVarValue('SimpleLoadoutSystem', 'LoadoutCount');
+	// a slider may store "7" or "7.000000"
+	count = RoundF(StringToFloat(raw, -1.0));
 	if (count < 1 || count > SLS_MaxLoadouts())
 	{
+		cfg.SetVarValue('SimpleLoadoutSystem', 'LoadoutCount', IntToString(SLS_MaxLoadouts()));
+		theGame.SaveUserSettings();
+		SLS_Log("loadouts setting was '" + raw + "' - set to the default " + IntToString(SLS_MaxLoadouts()));
 		return SLS_MaxLoadouts();
 	}
 	return count;
@@ -50,7 +67,7 @@ function SLS_Count() : int
 
 // ---- state -------------------------------------------------------------------------------------------------------
 
-// -1 no loadout, -2 Always worn, 0..3 a loadout. Kept as value + 3 so a missing fact (0) reads as none.
+// -1 no loadout, -2 Always worn, 0..9 a loadout. Kept as value + 3 so a missing fact (0) reads as none.
 function SLS_Active() : int
 {
 	var stored : int;
@@ -91,6 +108,12 @@ function SLS_Tag(loadout : int) : name
 		case 1: return 'SLS_L2';
 		case 2: return 'SLS_L3';
 		case 3: return 'SLS_L4';
+		case 4: return 'SLS_L5';
+		case 5: return 'SLS_L6';
+		case 6: return 'SLS_L7';
+		case 7: return 'SLS_L8';
+		case 8: return 'SLS_L9';
+		case 9: return 'SLS_L10';
 	}
 	return '';
 }
@@ -315,6 +338,17 @@ function SLS_OnMovie(text : string)
 		SLS_PushBoxes();
 		return;
 	}
+	// the column asks twice a second while it is on screen: a Loadouts change made meanwhile (Apocrypha Menu Framework's
+	// page can be open over the inventory) rebuilds it at once. Nothing is logged unless the count changed.
+	if (text == "SLS|poll")
+	{
+		if (SLS_Count() != slsShownCount)
+		{
+			SLS_Log("loadouts setting changed: " + IntToString(slsShownCount) + " -> " + IntToString(SLS_Count()));
+			SLS_PushBoxes();
+		}
+		return;
+	}
 	if (text == "SLS|focus|1")
 	{
 		SLS_SetColumnFocus(true);
@@ -456,7 +490,12 @@ function SLS_Storage() : bool
 	return false;
 }
 
-// The column's boxes: the loadouts, then "Always worn"; the active one lit.
+// How many loadout boxes the column was last given (the "SLS|poll" check).
+@addField(CR4InventoryMenu)
+var slsShownCount : int;
+
+// The column's boxes: "Always worn" at the top (the owner, 2026-10-14: "I want the always on button to be at the top of
+// the loadout list"), then the loadouts; the active one lit. Box 0 is "Always worn", box n is loadout n.
 @addMethod(CR4InventoryMenu)
 function SLS_PushBoxes()
 {
@@ -472,6 +511,10 @@ function SLS_PushBoxes()
 	active = SLS_Active();
 	count = SLS_Count();
 	boxes = m_flashValueStorage.CreateTempFlashArray();
+	box = m_flashValueStorage.CreateTempFlashObject();
+	box.SetMemberFlashString("label", GetLocStringByKeyExt("sls_always_worn"));
+	box.SetMemberFlashBool("lit", active == -2);
+	boxes.PushBackFlashObject(box);
 	for (i = 0; i < count; i += 1)
 	{
 		box = m_flashValueStorage.CreateTempFlashObject();
@@ -479,10 +522,7 @@ function SLS_PushBoxes()
 		box.SetMemberFlashBool("lit", active == i);
 		boxes.PushBackFlashObject(box);
 	}
-	box = m_flashValueStorage.CreateTempFlashObject();
-	box.SetMemberFlashString("label", GetLocStringByKeyExt("sls_always_worn"));
-	box.SetMemberFlashBool("lit", active == -2);
-	boxes.PushBackFlashObject(box);
+	slsShownCount = count;
 	m_flashValueStorage.SetFlashArray("inventory.sls.boxes", boxes);
 	m_flashValueStorage.SetFlashBool("inventory.sls.statsUp", slsStatsUp);
 }
@@ -532,13 +572,14 @@ function SLS_Press(box : int)
 	}
 
 	from = SLS_Active();
-	if (box == count)
+	// box 0 is "Always worn", box n is loadout n (index n - 1)
+	if (box == 0)
 	{
 		to = -2;
 	}
 	else
 	{
-		to = box;
+		to = box - 1;
 	}
 	if (to == from)
 	{
