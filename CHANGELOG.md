@@ -2,7 +2,7 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.2 - 2026-10-14 - untested
+## 1.0.2 - 2026-10-14 - working (the 'stash hiding fix' build, 7d60141, played in game by the owner from ~03:15; loadouts restored across a save load)
 
 The owner, 2026-10-14: *"I want 10 loadout slots"*, *"I want the always on button to be at the top of the loadout
 list"* and *"I want the AMF page for SLS to allow you to choose how many loadouts you want, up to 10."*
