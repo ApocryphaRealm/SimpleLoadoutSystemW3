@@ -6,7 +6,8 @@ carried to The Witcher 3 5.0. Pick a loadout and everything you equip while it i
 away and the gear goes into that loadout's storage (the stash, hidden from its list), out of your inventory and its
 weight; pick it again and it all comes back and is put on. "Always worn" keeps chosen pieces on through every switch.
 Loadout membership and the always-worn set are item modifiers (`SLS_Loadout`, `SLS_Always`), which the game saves -
-not item tags, which it does not (1.0.0-1.0.1 lost every stored loadout at the next load).
+not item tags, which it does not (1.0.0-1.0.1 lost every stored loadout at the next load). The stash list's hiding is
+the game's `NoShowInContainer` tag, put back from `SLS_Loadout` on every inventory open.
 
 * What the player gets: `dist/README.txt`
 * What changed: `CHANGELOG.md`

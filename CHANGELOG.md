@@ -16,8 +16,13 @@ list"* and *"I want the AMF page for SLS to allow you to choose how many loadout
   stripped gear (`quest_function.ws` MarkEquippedItemsForReequip):
   * a stored piece carries the item modifier `SLS_Loadout` = its loadout's number (1-10; 0 = not stored), which is
     saved with the game. A switch back takes every stash piece with that number;
-  * the stash list hides a piece whose `SLS_Loadout` is set (a wrapper on the container view's `ShouldShowItem`); the
-    `NoShowInContainer` tag is no longer used;
+  * the stash list hides a stored piece with the game's own `NoShowInContainer` tag, as before, but the tag is now put
+    back from `SLS_Loadout` on every inventory open, before the menu builds its lists (it is not saved, so a load
+    drops it). Log: `stash hiding: N stored piece(s) hidden from the stash list (M tag(s) put back after a load)`.
+    The first "persistent loadouts" test build hid them with a wrapper on `W3CommonContainerInventoryComponent
+    .ShouldShowItem` alone, and the owner saw stored pieces listed in the stash (2026-10-14): the stash view's own
+    `ShouldShowItem` reaches that class only through `super`, and the wrapper was most likely not reached that way. The
+    wrapper now only logs once if it is reached for a stored piece (a diagnostic);
   * the always-worn set is the item modifier `SLS_Always` = 1 on Geralt's pieces, cleared when the set is chosen again;
   * the first inventory open after a load logs what the stash holds for each loadout ("first inventory open since the
     load: active loadout 2; stash holds 10 stored piece(s): L2=4, L3=6"), and `SLS_DebugState` reads the modifiers.

@@ -28,8 +28,10 @@
 // game; run-time item tags (AddItemTag) are NOT - 1.0.0, 1.0.1 and the first 1.0.2 test build kept loadouts in tags,
 // and every stored loadout was forgotten at the next load (the owner, 2026-10-14; 4. plans\sls-w3-loadouts-lost-on-load\FINDINGS.md). The game
 // itself remembers stripped gear the same way (quest_function.ws MarkEquippedItemsForReequip, SetItemModifierInt).
-// The stash's list hides a stored piece by reading the modifier (the W3CommonContainerInventoryComponent.ShouldShowItem
-// wrapper below). The active loadout is a fact (sls_active), saved with the game.
+// The stash's list hides a stored piece with the game's own NoShowInContainer tag (W3CommonContainerInventoryComponent
+// .ShouldShowItem), the way 1.0.0-1.0.1 did within a session. That tag is not saved, so it is put back from the modifier
+// on every inventory open, before the menu builds its lists (SLS_SyncStashTags in the OnConfigUI wrapper): the modifier
+// is the saved truth, the tag only what the list reads. The active loadout is a fact (sls_active), saved with the game.
 
 // ---- settings ----------------------------------------------------------------------------------------------------
 
@@ -173,6 +175,33 @@ function SLS_StashSummary(stash : CInventoryComponent) : string
 	return "stash holds " + IntToString(total) + " stored piece(s): " + text;
 }
 
+// Puts the game's NoShowInContainer tag on every stash piece a loadout holds (SLS_Loadout > 0), so the stash's list
+// leaves it out. Run-time tags are not saved, so after a load every stored piece has lost it; this runs on every
+// inventory open, before the lists are built. A tag on a piece that is not stored is left alone (it may be the game's).
+function SLS_SyncStashTags(stash : CInventoryComponent) : int
+{
+	var all : array<SItemUniqueId>;
+	var i, stored, added : int;
+
+	stash.GetAllItems(all);
+	stored = 0;
+	added = 0;
+	for (i = 0; i < all.Size(); i += 1)
+	{
+		if (stash.GetItemModifierInt(all[i], 'SLS_Loadout', 0) > 0)
+		{
+			stored += 1;
+			if (!stash.ItemHasTag(all[i], 'NoShowInContainer'))
+			{
+				stash.AddItemTag(all[i], 'NoShowInContainer');
+				added += 1;
+			}
+		}
+	}
+	SLS_Log("stash hiding: " + IntToString(stored) + " stored piece(s) hidden from the stash list (" + IntToString(added) + " tag(s) put back after a load)");
+	return stored;
+}
+
 // ---- gear --------------------------------------------------------------------------------------------------------
 
 function SLS_GearSlots() : array<EEquipmentSlots>
@@ -276,8 +305,10 @@ function SLS_StoreWorn(menu : CR4InventoryMenu, player : W3PlayerWitcher, inv : 
 			SLS_Log("could not store " + NameToString(inv.GetItemName(item)) + " - it stays in the inventory");
 			continue;
 		}
-		// the loadout's number on the stash piece: saved with the game, and it hides the piece from the stash's list
+		// the loadout's number on the stash piece (saved with the game) and the game's tag that keeps it out of the
+		// stash's list (not saved - SLS_SyncStashTags puts it back after a load)
 		stash.SetItemModifierInt(moved, 'SLS_Loadout', from + 1);
+		stash.AddItemTag(moved, 'NoShowInContainer');
 		stored += 1;
 		SLS_Log("stored in " + SLS_Describe(from) + ": " + NameToString(stash.GetItemName(moved)) + " x" + IntToString(quantity));
 	}
@@ -297,11 +328,13 @@ function SLS_Restore(player : W3PlayerWitcher, inv : CInventoryComponent, stash 
 	{
 		quantity = stash.GetItemQuantity(items[i]);
 		stash.SetItemModifierInt(items[i], 'SLS_Loadout', 0);
+		stash.RemoveItemTag(items[i], 'NoShowInContainer');
 		back = stash.GiveItemTo(inv, items[i], quantity, false, false, false);
 		if (back == GetInvalidUniqueId())
 		{
 			// keep it in the loadout so it is not lost to the stash's list
 			stash.SetItemModifierInt(items[i], 'SLS_Loadout', to + 1);
+			stash.AddItemTag(items[i], 'NoShowInContainer');
 			SLS_Log("could not take back " + NameToString(stash.GetItemName(items[i])) + " from " + SLS_Describe(to));
 			continue;
 		}
@@ -665,33 +698,36 @@ function SLS_Press(box : int)
 	SLS_PushBoxes();
 }
 
-// The column also gets its state when the menu itself is set up, in case its own request came first.
-// On the first inventory open after a load it also logs what the stash holds for each loadout, so a test (or a
-// player's log) shows at once whether the stored loadouts came through the load.
+// Before the menu is set up (and builds the stash list - OnConfigUI opens a stash as IMS_Stash), every stored piece gets
+// its NoShowInContainer tag back from the saved modifier. After it, the column gets its state, in case its own request
+// came first. On the first inventory open after a load it also logs what the stash holds for each loadout, so a test
+// (or a player's log) shows at once whether the stored loadouts came through the load.
 @wrapMethod(CR4InventoryMenu)
 function OnConfigUI()
 {
 	var r : bool;
 	var player : W3PlayerWitcher;
+	var stash : CInventoryComponent;
 
+	player = GetWitcherPlayer();
+	if (player && player.GetHorseManager())
+	{
+		stash = player.GetHorseManager().GetInventoryComponent();
+	}
+	if (stash)
+	{
+		SLS_SyncStashTags(stash);
+	}
+	else
+	{
+		SLS_Log("stash hiding skipped: no player or no stash (horse manager) yet");
+	}
 	r = wrappedMethod();
 	SLS_PushBoxes();
-	player = GetWitcherPlayer();
-	if (!player)
-	{
-		SLS_Log("stash check skipped: no player");
-	}
-	else if (!player.slsStashLogged)
+	if (player && stash && !player.slsStashLogged)
 	{
 		player.slsStashLogged = true;
-		if (player.GetHorseManager() && player.GetHorseManager().GetInventoryComponent())
-		{
-			SLS_Log("first inventory open since the load: active " + SLS_Describe(SLS_Active()) + "; " + SLS_StashSummary(player.GetHorseManager().GetInventoryComponent()));
-		}
-		else
-		{
-			SLS_Log("stash check skipped: no stash (horse manager)");
-		}
+		SLS_Log("first inventory open since the load: active " + SLS_Describe(SLS_Active()) + "; " + SLS_StashSummary(stash));
 	}
 	return r;
 }
@@ -703,15 +739,23 @@ var slsStashLogged : bool;
 
 // ---- the stash's list --------------------------------------------------------------------------------------------
 
-// A stored piece is not listed in the stash (or any container view built on this class): the stash view is a
-// W3GuiContainerInventoryComponent (inventoryMenu.ws _horseInv), whose ShouldShowItem ends in this one. Only stash
-// pieces a loadout stored carry SLS_Loadout, so every other item goes through the game's own checks unchanged.
+// DIAGNOSTIC ONLY. The first "persistent loadouts" build hid stored pieces with this wrapper alone (return false when
+// SLS_Loadout > 0), and in the owner's game (2026-10-14) the stored pieces stayed listed in the stash. The stash view is
+// a W3GuiContainerInventoryComponent, whose own ShouldShowItem reaches this class only through
+// super.ShouldShowItem(item); the likely reason is that a wrapper on the base class is not reached through super (not
+// proven). The hiding is now the game's NoShowInContainer tag (SLS_SyncStashTags), which that same super call checks.
+// This wrapper only logs, once per list component, whether it is reached for a stored piece - which settles the question
+// - and changes nothing.
+@addField(W3CommonContainerInventoryComponent)
+var slsWrapLogged : bool;
+
 @wrapMethod(W3CommonContainerInventoryComponent)
 function ShouldShowItem(item : SItemUniqueId) : bool
 {
-	if (_inv && _inv.GetItemModifierInt(item, 'SLS_Loadout', 0) > 0)
+	if (!slsWrapLogged && _inv && _inv.GetItemModifierInt(item, 'SLS_Loadout', 0) > 0)
 	{
-		return false;
+		slsWrapLogged = true;
+		SLS_Log("diagnostic: the container ShouldShowItem wrapper IS reached for a stored piece (" + NameToString(_inv.GetItemName(item)) + ")");
 	}
 	return wrappedMethod(item);
 }
