@@ -2,9 +2,7 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.1 - 2026-10-13 - working (the build below the two newest entries; the rebuild with them is untested)
-
-The number is still open (1.0.1 is not posted), so these go in under it.
+## 1.0.1 - 2026-10-13 - working (the 'scroll bar + stick nav' build, 46261c4, tested in game by the owner 2026-10-13 ~23:00)
 
 * **Fixed: the loadout column covered the ARMOR grid's scroll bar** (the owner's screenshot, 2026-10-13). The column
   started at x 724 on the menu, 186 wide; the grid's scroll bar runs at x 728-752 (the grid module at 105, its
