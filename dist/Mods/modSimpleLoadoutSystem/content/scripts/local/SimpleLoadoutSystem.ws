@@ -331,6 +331,12 @@ function SLS_OnMovie(text : string)
 		SLS_Press(box);
 		return;
 	}
+	// how the column took or gave up the pad's focus, and which press did it (left stick / D-pad / right stick)
+	if (StrBeginsWith(text, "SLS|nav|"))
+	{
+		SLS_Log("column navigation: " + StrAfterFirst(text, "SLS|nav|"));
+		return;
+	}
 	// the column caught an error of its own and switched itself off for this menu; the inventory carries on without it
 	if (StrBeginsWith(text, "SLS|error|"))
 	{

@@ -10,9 +10,10 @@ storage, out of your inventory and your carry weight. Pick it again and it all c
 
 
 HOW IT WORKS
-- Controller: on the inventory screen, press Right at the right edge of the item grid (or Left at the left edge of the
-  equipment slots) to reach the column. Up / Down choose a box, A selects it (A on the active loadout deselects it),
-  Left goes back to the items, Right on to the equipment slots, B closes the inventory as always.
+- Controller: on the inventory screen, push the left stick (or the D-pad) Right at the right edge of the item grid, or
+  Left at the left edge of the equipment slots, to reach the column; the right stick's Jump Sections stops there too.
+  Up / Down choose a box, A selects it (A on the active loadout deselects it), Left goes back to the items, Right on
+  to the equipment slots, B closes the inventory as always.
   Keyboard and mouse: the arrow keys and E or Enter, or click a box.
 - Selecting a loadout takes off the gear you are wearing. Those items stay in your inventory - they belonged to no
   loadout. If the loadout already holds gear, it comes back and is put on.

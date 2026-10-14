@@ -2,7 +2,24 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.1 - 2026-10-13 - working
+## 1.0.1 - 2026-10-13 - working (the build below the two newest entries; the rebuild with them is untested)
+
+The number is still open (1.0.1 is not posted), so these go in under it.
+
+* **Fixed: the loadout column covered the ARMOR grid's scroll bar** (the owner's screenshot, 2026-10-13). The column
+  started at x 724 on the menu, 186 wide; the grid's scroll bar runs at x 728-752 (the grid module at 105, its
+  DefaultScrollBar at 623 inside it, the thumb 24 wide), so the boxes sat over it and took its mouse drags. The column
+  now starts at x 763 and is 160 wide, in the middle of the gap between the scroll bar and the paperdoll's first slot
+  frame (about x 933). The labels still fit; a long translation shrinks as before.
+* **Fixed: the left stick went straight past the column** (the owner, 2026-10-13: Weapons -> Armor -> the equipped
+  slots, never the boxes). The script log showed "column focus: on" and "column focus: off" back to back: the column
+  did take the focus, and a second sideways press from the same push took it straight on to the paperdoll. One push now
+  moves one place: a sideways press that comes within 250 ms of the column taking or giving up the focus is the same
+  push and is swallowed (leaving still needs a fresh press, as before). The right stick's Jump Sections (Left/Right)
+  now stops at the column as well and leaves it again; before, it jumped over the column, and while the column had the
+  focus it did nothing at all. Every move into, out of and within the column is logged on the SimpleLoadoutSystem
+  channel ("column navigation: in from the item grid: right code ... +0ms", "same push, ignored ..."), so a test shows
+  which press did what.
 
 * **Fixed: the settings menu's labels.** The menu looks its labels up with prefixes (`panel_` for the group, `option_` for
   the setting, `preset_value_` for each choice), and the string tables only held the bare keys. So Apocrypha Menu

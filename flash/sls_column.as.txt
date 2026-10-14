@@ -6,25 +6,34 @@
       // the other SLS mods." Five boxes: the loadouts and "Always worn", in the empty strip between the item grid's
       // ARMOR panel and the paperdoll's first slot column.
       //
-      // Navigation joins the menu's own: the menu moves between its modules with D-pad Left/Right that a module did not
-      // use (CoreMenu.handleInputNavigate). Right from the item grid's right edge, or Left from the paperdoll's left edge,
-      // enters the column instead; Up/Down move between the boxes; A (keyboard E or Enter) selects; Left goes back to
-      // the grid, Right on to the paperdoll; B closes the menu as always. While the column has focus the module that had
-      // it is unfocused, so no grid or paperdoll reacts to the same press.
+      // Navigation joins the menu's own: the menu moves between its modules with a Left/Right (D-pad or left stick) or a
+      // right-stick Left/Right ("Jump Sections") that a module did not use (CoreMenu.handleInputNavigate). Either one from
+      // the item grid's right edge, or from the paperdoll's left edge, enters the column instead; Up/Down move between the
+      // boxes; A (keyboard E or Enter) selects; Left goes back to the grid, Right on to the paperdoll; B closes the menu
+      // as always. While the column has focus the module that had it is unfocused, so no grid or paperdoll reacts to the
+      // same press. ONE PUSH MOVES ONE PLACE (1.0.1, the owner's 2026-10-13 test: the left stick went from the ARMOR grid
+      // straight to the paperdoll; the script log had "column focus: on" and "off" back to back): a second sideways press
+      // within SLS_SAME_PUSH_MS of the column taking or giving up the focus is the same push and is swallowed.
       //
       // The press goes to WitcherScript through the base menu's OnBreakPoint event ("SLS|activate|<box>"), which the
       // mod's script wraps; the script answers through the "inventory.sls.boxes" binding. The switch itself only ever
       // runs from this press (the owner's rule for every SLS: nothing moves until a box was navigated to and activated).
 
-      protected static const SLS_X:Number = 724;
+      // x: clear of the ARMOR grid's scroll bar. The grid module sits at x 105 and its DefaultScrollBar at 623 inside it, the
+      // thumb 24 wide, so the bar runs x 728-752 on the menu; the paperdoll's first slot frame starts at about x 933. The
+      // column (763-923) sits in the middle of that gap. 1.0.0/1.0.1 had x 724, width 186: the boxes covered the scroll bar
+      // (the owner's screenshot, 2026-10-13) and took its mouse drags.
+      protected static const SLS_X:Number = 763;
       protected static const SLS_Y:Number = 232;
-      protected static const SLS_W:Number = 186;
+      protected static const SLS_W:Number = 160;
       protected static const SLS_H:Number = 50;
       protected static const SLS_GAP:Number = 10;
       protected static const SLS_FONT_SIZE:int = 22;
       protected static const SLS_LINE:uint = 0x8C8C8C;
       protected static const SLS_TEXT:uint = 0xE6E1D6;
       protected static const SLS_LIT:uint = 0xE8C27A;
+      // a sideways press this soon after the column took or gave up the focus belongs to the push that moved it
+      protected static const SLS_SAME_PUSH_MS:int = 250;
 
       protected var slsBoxes:Array = [];
       protected var slsData:Array = null;
@@ -41,6 +50,7 @@
       protected var slsStageHooked:Boolean = false;
       protected var slsStatsUp:Boolean = false;   // the character stats page (RT) is over the inventory
       protected var slsOff:Boolean = false;       // the column failed and is off for this menu; the inventory carries on
+      protected var slsMovedAt:int = -100000;     // getTimer() when a sideways press last moved the focus into or out of the column
 
       // THE COLUMN CAN NEVER TAKE THE INVENTORY DOWN. slsSafeInit runs from configUI AFTER the menu has told the game it
       // is ready (dispatchEvent "OnConfigUI" - the call that makes the game fill the grid and the character preview), never
@@ -342,10 +352,62 @@
 
       protected function slsStageInput(param1:InputEvent) : void
       {
-         if(this.slsFocused && !param1.handled && !this.slsOff)
+         if(this.slsOff || param1.handled)
+         {
+            return;
+         }
+         if(this.slsFocused)
          {
             this.slsSafeHandleInput(param1);
+            return;
          }
+         try
+         {
+            // just left the column sideways: the rest of that push must not take a second step in the grid or the
+            // paperdoll (priority 100 on the stage runs before every module)
+            if(this.slsShown && this.slsSide(param1.details) != 0 && this.slsSamePush())
+            {
+               this.slsNav("same push, ignored after leaving: " + this.slsPress(param1.details));
+               param1.handled = true;
+               param1.stopImmediatePropagation();
+            }
+         }
+         catch(e:Error)
+         {
+            this.slsFail("input",e);
+         }
+      }
+
+      // -1 / 1 for a sideways press that moves between the menu's modules (D-pad or left stick Left/Right, or the right
+      // stick's Left/Right - "Jump Sections"), 0 for anything else
+      protected function slsSide(param1:InputDetails) : int
+      {
+         if(param1.navEquivalent == NavigationCode.RIGHT || param1.navEquivalent == NavigationCode.RIGHT_STICK_RIGHT)
+         {
+            return 1;
+         }
+         if(param1.navEquivalent == NavigationCode.LEFT || param1.navEquivalent == NavigationCode.RIGHT_STICK_LEFT)
+         {
+            return -1;
+         }
+         return 0;
+      }
+
+      protected function slsSamePush() : Boolean
+      {
+         return getTimer() - this.slsMovedAt < SLS_SAME_PUSH_MS;
+      }
+
+      // what the press was, for the log: "right code 39 keyDown stick +16ms"
+      protected function slsPress(param1:InputDetails) : String
+      {
+         return param1.navEquivalent + " code " + param1.code + " " + param1.value + (param1.fromJoystick ? " stick" : "") + " +" + (getTimer() - this.slsMovedAt) + "ms";
+      }
+
+      // a navigation line in the script log (SimpleLoadoutSystem channel): how the column took or gave up the focus
+      protected function slsNav(param1:String) : void
+      {
+         dispatchEvent(new GameEvent(GameEvent.CALL,"OnBreakPoint",["SLS|nav|" + param1]));
       }
 
       // shown only on the player's own inventory with the paperdoll (not in a shop, container, stash or horse view); the
@@ -495,6 +557,8 @@
          var _loc4_:Boolean = _loc2_.value == InputValue.KEY_UP;
          var _loc5_:Object = null;
          var _loc6_:Boolean = _loc2_.navEquivalent == NavigationCode.GAMEPAD_A || _loc2_.code == KeyCode.E || _loc2_.code == KeyCode.ENTER;
+         var _loc7_:int = this.slsSide(_loc2_);
+         var _loc8_:Boolean = _loc2_.navEquivalent == NavigationCode.RIGHT_STICK_LEFT || _loc2_.navEquivalent == NavigationCode.RIGHT_STICK_RIGHT;
          if(!this.slsShown)
          {
             return false;
@@ -506,14 +570,18 @@
          }
          if(!this.slsFocused)
          {
-            if(param1.handled || !_loc3_)
+            // the same moves the menu makes between its modules: Left/Right on a press or a hold, the right stick on a
+            // press only (CoreMenu.handleInputNavigate); here they reach the column instead of the next module
+            if(param1.handled || _loc7_ == 0 || !(_loc2_.value == InputValue.KEY_DOWN || _loc2_.value == InputValue.KEY_HOLD && !_loc8_))
             {
                return false;
             }
             _loc5_ = this.slsCurrentModule();
-            if(_loc2_.navEquivalent == NavigationCode.RIGHT && _loc5_ == this.mcPlayerInventory || _loc2_.navEquivalent == NavigationCode.LEFT && _loc5_ == this.mcPaperDollModule)
+            if(_loc7_ > 0 && _loc5_ == this.mcPlayerInventory || _loc7_ < 0 && _loc5_ == this.mcPaperDollModule)
             {
                this.slsEnter();
+               this.slsNav("in from the " + (_loc7_ > 0 ? "item grid" : "paperdoll") + ": " + this.slsPress(_loc2_));
+               this.slsMovedAt = getTimer();
                param1.handled = true;
                return true;
             }
@@ -523,7 +591,24 @@
          {
             return false;
          }
-         if(_loc3_)
+         if(_loc7_ != 0)
+         {
+            // leaving takes a fresh press; a hold, or a press that is still the push that brought the focus in, stays
+            if(_loc2_.value == InputValue.KEY_DOWN)
+            {
+               if(this.slsSamePush())
+               {
+                  this.slsNav("same push, ignored in the column: " + this.slsPress(_loc2_));
+               }
+               else
+               {
+                  this.slsNav("out to the " + (_loc7_ > 0 ? "paperdoll" : "item grid") + ": " + this.slsPress(_loc2_));
+                  this.slsLeave(_loc7_);
+                  this.slsMovedAt = getTimer();
+               }
+            }
+         }
+         else if(_loc3_)
          {
             switch(_loc2_.navEquivalent)
             {
@@ -533,6 +618,7 @@
                      --this.slsCursor;
                      this.slsSound("gui_global_highlight");
                      this.slsDraw();
+                     this.slsNav("up to box " + this.slsCursor + ": " + this.slsPress(_loc2_));
                   }
                   break;
                case NavigationCode.DOWN:
@@ -541,18 +627,7 @@
                      ++this.slsCursor;
                      this.slsSound("gui_global_highlight");
                      this.slsDraw();
-                  }
-                  break;
-               case NavigationCode.LEFT:
-                  if(_loc2_.value == InputValue.KEY_DOWN)
-                  {
-                     this.slsLeave(-1);
-                  }
-                  break;
-               case NavigationCode.RIGHT:
-                  if(_loc2_.value == InputValue.KEY_DOWN)
-                  {
-                     this.slsLeave(1);
+                     this.slsNav("down to box " + this.slsCursor + ": " + this.slsPress(_loc2_));
                   }
             }
          }
