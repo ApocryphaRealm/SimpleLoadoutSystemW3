@@ -2,7 +2,9 @@
 <!-- Simple Loadout System: Options > Mods > Simple Loadout System (and the same row in Apocrypha Menu Framework).
      LoadoutCount: how many loadout boxes the inventory's column shows below "Always worn" - a slider, 1 to 10, one loadout
      per nudge (9 steps). The value is the count itself. Empty (never set) means the default, 10: the script writes it
-     the first time it reads the setting, so the slider shows what the column shows (SimpleLoadoutSystem.ws SLS_Count). -->
+     once, when an inventory's loadout column first asks for its boxes, so the slider shows what the column shows
+     (SimpleLoadoutSystem.ws SLS_WriteDefaultCount). Without this file (the mod.io build) the column shows 10 and
+     nothing is written. -->
 <UserConfig>
 	<Group id="SimpleLoadoutSystem" displayName="Mods.sls_menu">
 		<VisibleVars>

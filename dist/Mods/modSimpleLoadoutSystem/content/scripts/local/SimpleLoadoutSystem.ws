@@ -43,9 +43,13 @@ function SLS_MaxLoadouts() : int
 
 // Options > Mods > Simple Loadout System > Loadouts (and the same row on Apocrypha Menu Framework's page): a slider,
 // 1 to 10, one loadout per nudge (SimpleLoadoutSystem.xml SLIDER;1;10;9). The value is the count itself. The column
-// always starts with "Always worn". Default 10, the most there are: a value that is empty (never set) or not a count
-// 1-10 is written as 10 and saved, so the slider shows what the column shows. A count chosen before 1.0.2 (1-4, from
-// the old list) is kept as it is. Fewer loadouts only hides the higher boxes: their stored gear stays where it is.
+// always starts with "Always worn". Default 10, the most there are. A count chosen before 1.0.2 (1-4, from the old
+// list) is kept as it is. Fewer loadouts only hides the higher boxes: their stored gear stays where it is.
+//
+// SLS_Count only READS - it runs from the column's twice-a-second poll. A value that is empty (never set), not a count
+// 1-10, or a settings group that does not exist at all (the mod.io build ships no bin\config menu XML, so there is no
+// slider and no group) reads as 10 and writes nothing. 1.0.0-1.0.2 wrote and saved the user settings here on every
+// invalid read, which with no menu XML meant a settings save from every poll (1.0.3).
 function SLS_Count() : int
 {
 	var cfg : CInGameConfigWrapper;
@@ -53,7 +57,7 @@ function SLS_Count() : int
 	var count : int;
 
 	cfg = theGame.GetInGameConfigWrapper();
-	if (!cfg)
+	if (!cfg || cfg.GetGroupIdx("SimpleLoadoutSystem") < 0)
 	{
 		return SLS_MaxLoadouts();
 	}
@@ -62,12 +66,34 @@ function SLS_Count() : int
 	count = RoundF(StringToFloat(raw, -1.0));
 	if (count < 1 || count > SLS_MaxLoadouts())
 	{
-		cfg.SetVarValue('SimpleLoadoutSystem', 'LoadoutCount', IntToString(SLS_MaxLoadouts()));
-		theGame.SaveUserSettings();
-		SLS_Log("loadouts setting was '" + raw + "' - set to the default " + IntToString(SLS_MaxLoadouts()));
 		return SLS_MaxLoadouts();
 	}
 	return count;
+}
+
+// Writes the default (10) into the Loadouts slider once, so the slider shows what the column shows - only when the
+// settings group exists (the menu XML is installed) and its value is empty or not a count 1-10. Called once per
+// inventory menu, from the column's "SLS|ready" (SLS_OnMovie, guarded by slsDefaultChecked), never from the poll.
+function SLS_WriteDefaultCount()
+{
+	var cfg : CInGameConfigWrapper;
+	var raw : string;
+	var count : int;
+
+	cfg = theGame.GetInGameConfigWrapper();
+	if (!cfg || cfg.GetGroupIdx("SimpleLoadoutSystem") < 0)
+	{
+		return;
+	}
+	raw = cfg.GetVarValue('SimpleLoadoutSystem', 'LoadoutCount');
+	count = RoundF(StringToFloat(raw, -1.0));
+	if (count >= 1 && count <= SLS_MaxLoadouts())
+	{
+		return;
+	}
+	cfg.SetVarValue('SimpleLoadoutSystem', 'LoadoutCount', IntToString(SLS_MaxLoadouts()));
+	theGame.SaveUserSettings();
+	SLS_Log("loadouts setting was '" + raw + "' - set to the default " + IntToString(SLS_MaxLoadouts()));
 }
 
 // ---- state -------------------------------------------------------------------------------------------------------
@@ -414,6 +440,12 @@ function SLS_OnMovie(text : string)
 
 	if (text == "SLS|ready")
 	{
+		// the Loadouts slider's default is written here at most once per inventory menu (never from the poll below)
+		if (!slsDefaultChecked)
+		{
+			slsDefaultChecked = true;
+			SLS_WriteDefaultCount();
+		}
 		SLS_PushBoxes();
 		return;
 	}
@@ -572,6 +604,10 @@ function SLS_Storage() : bool
 // How many loadout boxes the column was last given (the "SLS|poll" check).
 @addField(CR4InventoryMenu)
 var slsShownCount : int;
+
+// True once this inventory menu has checked the Loadouts slider's default (SLS_WriteDefaultCount, from "SLS|ready").
+@addField(CR4InventoryMenu)
+var slsDefaultChecked : bool;
 
 // The column's boxes: "Always worn" at the top (the owner, 2026-10-14: "I want the always on button to be at the top of
 // the loadout list"), then the loadouts; the active one lit. Box 0 is "Always worn", box n is loadout n.

@@ -2,6 +2,21 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
+## 1.0.3 - 2026-10-14 - untested (the 'no settings save from the poll' build; the first mod.io package)
+
+* **Fixed: with no menu XML installed, the Loadouts setting was written and saved twice a second.** `SLS_Count` read
+  an empty or missing `SimpleLoadoutSystem` / `LoadoutCount` as invalid, wrote the default and called
+  `SaveUserSettings` - and the inventory's loadout column asks for the count twice a second (`SLS|poll`). With the
+  menu XML in `bin\config` the first write made the value valid, so the Nexus build saved once; without it (the
+  mod.io build, which cannot install `bin\config`) there is no settings group, nothing is ever valid, and every poll
+  saved the user settings. Now `SLS_Count` only reads: a missing group, an empty value or one outside 1-10 reads as 10
+  and writes nothing. The default is written by `SLS_WriteDefaultCount`, only when the group exists, and at most once
+  per inventory menu, from the column's `SLS|ready` - never from the poll.
+* **mod.io package** (`tools/package_modio.py`): the mod's `Mods\modSimpleLoadoutSystem` folder only, every path lower
+  case, with `content\info.json` and the script cooked by REDkit into `precompiled.rsblob` beside the loose `.ws`.
+  It has no `bin\config` menu XML (mod.io installs one folder), so the Loadouts slider is not there and the column
+  always shows ten loadouts; its README says so.
+
 ## 1.0.2 - 2026-10-14 - working (the 'stash hiding fix' build, 7d60141, played in game by the owner from ~03:15; loadouts restored across a save load)
 
 The owner, 2026-10-14: *"I want 10 loadout slots"*, *"I want the always on button to be at the top of the loadout
