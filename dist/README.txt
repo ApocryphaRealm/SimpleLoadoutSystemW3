@@ -29,7 +29,10 @@ HOW IT WORKS
   trophies and horse gear are left alone. Quest items are only taken off, never stored; the infinite bolts stay as they
   are.
 - Where the gear is kept: the stash - the one every stash chest in the world opens. Stored loadout gear is hidden from
-  the stash's list, so it is not taken out by mistake.
+  the stash's list, so it is not taken out by mistake. Loadouts and the always-worn set are saved with your game.
+- Upgrading from 1.0.0 or 1.0.1: those versions lost their loadouts at every load (the stored gear stayed in the
+  stash, listed as ordinary items). Assign your loadouts once more: take the gear out of any stash, wear a set, select
+  its loadout, and choose the always-worn set again. From this version on they survive saving and loading.
 - You cannot change loadouts in combat.
 
 

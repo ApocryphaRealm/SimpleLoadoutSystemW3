@@ -7,9 +7,24 @@ Versions are issued by the project's version gate. Written as the change happens
 The owner, 2026-10-14: *"I want 10 loadout slots"*, *"I want the always on button to be at the top of the loadout
 list"* and *"I want the AMF page for SLS to allow you to choose how many loadouts you want, up to 10."*
 
-* **Ten loadouts.** Loadout 1-10 (was 1-4). Each new loadout stores its gear in the stash the same way, with its own
-  tag (`SLS_L5` .. `SLS_L10`). The tags of loadouts 1-4 and the saved active-loadout fact are unchanged, so a save's
-  loadouts 1-4 and their gear carry over as they are.
+* **Fixed: stored loadouts were lost on every load** (the owner, 2026-10-14: "I just died, and when I respawned,
+  loadouts 2 and 3 were empty"; `4. plans\sls-w3-loadouts-lost-on-load\FINDINGS.md`). The game does not save item
+  tags added while playing, and 1.0.0-1.0.1 (and the first 1.0.2 test build) kept everything in such tags: which
+  loadout a stash piece belonged to (`SLS_L<n>`), the stash list's hiding (`NoShowInContainer`) and the always-worn set
+  (`SLS_Always`). After any load a stored piece belonged to no loadout and showed in the stash list, and the always-worn
+  set was forgotten. Nothing was destroyed - the pieces stayed in the stash. Now, the way the game itself remembers
+  stripped gear (`quest_function.ws` MarkEquippedItemsForReequip):
+  * a stored piece carries the item modifier `SLS_Loadout` = its loadout's number (1-10; 0 = not stored), which is
+    saved with the game. A switch back takes every stash piece with that number;
+  * the stash list hides a piece whose `SLS_Loadout` is set (a wrapper on the container view's `ShouldShowItem`); the
+    `NoShowInContainer` tag is no longer used;
+  * the always-worn set is the item modifier `SLS_Always` = 1 on Geralt's pieces, cleared when the set is chosen again;
+  * the first inventory open after a load logs what the stash holds for each loadout ("first inventory open since the
+    load: active loadout 2; stash holds 10 stored piece(s): L2=4, L3=6"), and `SLS_DebugState` reads the modifiers.
+  **Upgrading: reassign your loadouts once.** Gear stored under 1.0.0-1.0.1 cannot be told apart after a load, so it is
+  in the stash list as ordinary items: take it out of any stash, wear it, and select the loadout again (and choose the
+  always-worn set again).
+* **Ten loadouts.** Loadout 1-10 (was 1-4). The saved active-loadout fact is unchanged.
 * **"Always worn" is at the top of the column**, above Loadout 1. Up/Down runs Always worn, Loadout 1, Loadout 2, ...
 * **The Loadouts setting is a slider, 1 to 10, one loadout per nudge** (Options > Mods > Simple Loadout System and the
   same row on Apocrypha Menu Framework's page). It was a list of 4, 3, 2 and 1. The slider stores the count itself in

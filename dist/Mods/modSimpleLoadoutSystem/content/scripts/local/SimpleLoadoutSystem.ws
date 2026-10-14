@@ -22,15 +22,18 @@
 // - No switching in combat.
 //
 // Storage: the shared stash - the horse manager's inventory, the one every stash in the world opens (inventoryMenu.ws:
-// IMS_Stash shows _horseInv). It follows Geralt to every region, is saved with the game and weighs nothing. A stored
-// piece carries its loadout's tag (SLS_L1..SLS_L10) and the game's own NoShowInContainer tag, which keeps it out of the
-// stash's list (guiContainerInventoryComponent.ws ShouldShowItem). The active loadout is a fact (sls_active), saved
-// with the game.
+// IMS_Stash shows _horseInv). It follows Geralt to every region, is saved with the game and weighs nothing.
+// A stored piece carries the ITEM MODIFIER SLS_Loadout = its loadout's number (1..10; 0 = not stored), and the
+// always-worn set carries the item modifier SLS_Always = 1 on Geralt's own items. Item modifiers are saved with the
+// game; run-time item tags (AddItemTag) are NOT - 1.0.0, 1.0.1 and the first 1.0.2 test build kept loadouts in tags,
+// and every stored loadout was forgotten at the next load (the owner, 2026-10-14; 4. plans\sls-w3-loadouts-lost-on-load\FINDINGS.md). The game
+// itself remembers stripped gear the same way (quest_function.ws MarkEquippedItemsForReequip, SetItemModifierInt).
+// The stash's list hides a stored piece by reading the modifier (the W3CommonContainerInventoryComponent.ShouldShowItem
+// wrapper below). The active loadout is a fact (sls_active), saved with the game.
 
 // ---- settings ----------------------------------------------------------------------------------------------------
 
-// Ten loadouts since 1.0.2 (the owner, 2026-10-14: "I want 10 loadout slots"); 1.0.0-1.0.1 had four. Their storage
-// tags (SLS_L1..SLS_L4) and the active-loadout fact are unchanged, so a save's loadouts 1-4 are still loadouts 1-4.
+// Ten loadouts since 1.0.2 (the owner, 2026-10-14: "I want 10 loadout slots"); 1.0.0-1.0.1 had four.
 function SLS_MaxLoadouts() : int
 {
 	return 10;
@@ -100,27 +103,74 @@ function SLS_Describe(active : int) : string
 	return "loadout " + IntToString(active + 1);
 }
 
-function SLS_Tag(loadout : int) : name
-{
-	switch (loadout)
-	{
-		case 0: return 'SLS_L1';
-		case 1: return 'SLS_L2';
-		case 2: return 'SLS_L3';
-		case 3: return 'SLS_L4';
-		case 4: return 'SLS_L5';
-		case 5: return 'SLS_L6';
-		case 6: return 'SLS_L7';
-		case 7: return 'SLS_L8';
-		case 8: return 'SLS_L9';
-		case 9: return 'SLS_L10';
-	}
-	return '';
-}
-
 function SLS_Log(text : string)
 {
 	LogChannel('SimpleLoadoutSystem', text);
+}
+
+// ---- what is stored (item modifiers, saved with the game) --------------------------------------------------------
+
+// The stash pieces stored in a loadout (0..9): SLS_Loadout == loadout + 1.
+function SLS_StoredIn(stash : CInventoryComponent, loadout : int) : array<SItemUniqueId>
+{
+	var all, items : array<SItemUniqueId>;
+	var i : int;
+
+	stash.GetAllItems(all);
+	for (i = 0; i < all.Size(); i += 1)
+	{
+		if (stash.GetItemModifierInt(all[i], 'SLS_Loadout', 0) == loadout + 1)
+		{
+			items.PushBack(all[i]);
+		}
+	}
+	return items;
+}
+
+// Geralt's always-worn pieces: SLS_Always == 1.
+function SLS_AlwaysItems(inv : CInventoryComponent) : array<SItemUniqueId>
+{
+	var all, items : array<SItemUniqueId>;
+	var i : int;
+
+	inv.GetAllItems(all);
+	for (i = 0; i < all.Size(); i += 1)
+	{
+		if (inv.GetItemModifierInt(all[i], 'SLS_Always', 0) > 0)
+		{
+			items.PushBack(all[i]);
+		}
+	}
+	return items;
+}
+
+// One line for the log: how many pieces each loadout holds in the stash ("stash holds 10 stored piece(s): L2=4, L3=6").
+function SLS_StashSummary(stash : CInventoryComponent) : string
+{
+	var items : array<SItemUniqueId>;
+	var text : string;
+	var i, total : int;
+
+	text = "";
+	total = 0;
+	for (i = 0; i < SLS_MaxLoadouts(); i += 1)
+	{
+		items = SLS_StoredIn(stash, i);
+		if (items.Size() > 0)
+		{
+			if (total > 0)
+			{
+				text += ", ";
+			}
+			text += "L" + IntToString(i + 1) + "=" + IntToString(items.Size());
+			total += items.Size();
+		}
+	}
+	if (total == 0)
+	{
+		return "stash holds 0 stored pieces";
+	}
+	return "stash holds " + IntToString(total) + " stored piece(s): " + text;
 }
 
 // ---- gear --------------------------------------------------------------------------------------------------------
@@ -156,10 +206,10 @@ function SLS_CaptureAlways(player : W3PlayerWitcher, inv : CInventoryComponent) 
 	var item : SItemUniqueId;
 	var i, count : int;
 
-	old = inv.GetItemsByTag('SLS_Always');
+	old = SLS_AlwaysItems(inv);
 	for (i = 0; i < old.Size(); i += 1)
 	{
-		inv.RemoveItemTag(old[i], 'SLS_Always');
+		inv.SetItemModifierInt(old[i], 'SLS_Always', 0);
 	}
 	slots = SLS_GearSlots();
 	count = 0;
@@ -167,7 +217,7 @@ function SLS_CaptureAlways(player : W3PlayerWitcher, inv : CInventoryComponent) 
 	{
 		if (player.GetItemEquippedOnSlot(slots[i], item) && !SLS_MustStay(inv, item))
 		{
-			inv.AddItemTag(item, 'SLS_Always');
+			inv.SetItemModifierInt(item, 'SLS_Always', 1);
 			count += 1;
 			SLS_Log("always worn: " + NameToString(inv.GetItemName(item)));
 		}
@@ -184,11 +234,9 @@ function SLS_StoreWorn(menu : CR4InventoryMenu, player : W3PlayerWitcher, inv : 
 {
 	var slots : array<EEquipmentSlots>;
 	var item, moved : SItemUniqueId;
-	var tag : name;
 	var i, kept, quantity : int;
 
 	slots = SLS_GearSlots();
-	tag = SLS_Tag(from);
 	kept = 0;
 	stored = 0;
 	for (i = 0; i < slots.Size(); i += 1)
@@ -197,7 +245,7 @@ function SLS_StoreWorn(menu : CR4InventoryMenu, player : W3PlayerWitcher, inv : 
 		{
 			continue;
 		}
-		if (inv.ItemHasTag(item, 'SLS_Always'))
+		if (inv.GetItemModifierInt(item, 'SLS_Always', 0) > 0)
 		{
 			SLS_Log("stays on (always worn): " + NameToString(inv.GetItemName(item)));
 			continue;
@@ -228,8 +276,8 @@ function SLS_StoreWorn(menu : CR4InventoryMenu, player : W3PlayerWitcher, inv : 
 			SLS_Log("could not store " + NameToString(inv.GetItemName(item)) + " - it stays in the inventory");
 			continue;
 		}
-		stash.AddItemTag(moved, tag);
-		stash.AddItemTag(moved, 'NoShowInContainer');
+		// the loadout's number on the stash piece: saved with the game, and it hides the piece from the stash's list
+		stash.SetItemModifierInt(moved, 'SLS_Loadout', from + 1);
 		stored += 1;
 		SLS_Log("stored in " + SLS_Describe(from) + ": " + NameToString(stash.GetItemName(moved)) + " x" + IntToString(quantity));
 	}
@@ -241,26 +289,24 @@ function SLS_Restore(player : W3PlayerWitcher, inv : CInventoryComponent, stash 
 {
 	var items : array<SItemUniqueId>;
 	var back : SItemUniqueId;
-	var tag : name;
 	var i, quantity, restored : int;
 
-	tag = SLS_Tag(to);
-	items = stash.GetItemsByTag(tag);
+	items = SLS_StoredIn(stash, to);
 	restored = 0;
 	for (i = 0; i < items.Size(); i += 1)
 	{
 		quantity = stash.GetItemQuantity(items[i]);
-		stash.RemoveItemTag(items[i], tag);
-		stash.RemoveItemTag(items[i], 'NoShowInContainer');
+		stash.SetItemModifierInt(items[i], 'SLS_Loadout', 0);
 		back = stash.GiveItemTo(inv, items[i], quantity, false, false, false);
 		if (back == GetInvalidUniqueId())
 		{
-			// keep it tagged so it is not lost to the stash's list
-			stash.AddItemTag(items[i], tag);
-			stash.AddItemTag(items[i], 'NoShowInContainer');
+			// keep it in the loadout so it is not lost to the stash's list
+			stash.SetItemModifierInt(items[i], 'SLS_Loadout', to + 1);
 			SLS_Log("could not take back " + NameToString(stash.GetItemName(items[i])) + " from " + SLS_Describe(to));
 			continue;
 		}
+		// in case the move carried the modifier over: Geralt's own copy belongs to no stored loadout
+		inv.SetItemModifierInt(back, 'SLS_Loadout', 0);
 		if (!player.EquipItem(back))
 		{
 			SLS_Log("back in the inventory but not put on: " + NameToString(inv.GetItemName(back)));
@@ -279,7 +325,7 @@ function SLS_ReapplyAlways(player : W3PlayerWitcher, inv : CInventoryComponent)
 	var slot : EEquipmentSlots;
 	var i : int;
 
-	items = inv.GetItemsByTag('SLS_Always');
+	items = SLS_AlwaysItems(inv);
 	for (i = 0; i < items.Size(); i += 1)
 	{
 		if (player.IsItemEquipped(items[i]))
@@ -620,11 +666,54 @@ function SLS_Press(box : int)
 }
 
 // The column also gets its state when the menu itself is set up, in case its own request came first.
+// On the first inventory open after a load it also logs what the stash holds for each loadout, so a test (or a
+// player's log) shows at once whether the stored loadouts came through the load.
 @wrapMethod(CR4InventoryMenu)
 function OnConfigUI()
 {
-	wrappedMethod();
+	var r : bool;
+	var player : W3PlayerWitcher;
+
+	r = wrappedMethod();
 	SLS_PushBoxes();
+	player = GetWitcherPlayer();
+	if (!player)
+	{
+		SLS_Log("stash check skipped: no player");
+	}
+	else if (!player.slsStashLogged)
+	{
+		player.slsStashLogged = true;
+		if (player.GetHorseManager() && player.GetHorseManager().GetInventoryComponent())
+		{
+			SLS_Log("first inventory open since the load: active " + SLS_Describe(SLS_Active()) + "; " + SLS_StashSummary(player.GetHorseManager().GetInventoryComponent()));
+		}
+		else
+		{
+			SLS_Log("stash check skipped: no stash (horse manager)");
+		}
+	}
+	return r;
+}
+
+// Set on the first inventory open of a session; not a saved field, so it is false again after every load (the player
+// entity is made anew from the save).
+@addField(W3PlayerWitcher)
+var slsStashLogged : bool;
+
+// ---- the stash's list --------------------------------------------------------------------------------------------
+
+// A stored piece is not listed in the stash (or any container view built on this class): the stash view is a
+// W3GuiContainerInventoryComponent (inventoryMenu.ws _horseInv), whose ShouldShowItem ends in this one. Only stash
+// pieces a loadout stored carry SLS_Loadout, so every other item goes through the game's own checks unchanged.
+@wrapMethod(W3CommonContainerInventoryComponent)
+function ShouldShowItem(item : SItemUniqueId) : bool
+{
+	if (_inv && _inv.GetItemModifierInt(item, 'SLS_Loadout', 0) > 0)
+	{
+		return false;
+	}
+	return wrappedMethod(item);
 }
 
 // ---- observability -----------------------------------------------------------------------------------------------
@@ -649,7 +738,7 @@ function SLS_DebugState() : string
 	text = "active=" + SLS_Describe(SLS_Active()) + "; count=" + IntToString(SLS_Count());
 	for (i = 0; i < SLS_MaxLoadouts(); i += 1)
 	{
-		items = stash.GetItemsByTag(SLS_Tag(i));
+		items = SLS_StoredIn(stash, i);
 		text += "; L" + IntToString(i + 1) + "=[";
 		for (j = 0; j < items.Size(); j += 1)
 		{
@@ -661,7 +750,7 @@ function SLS_DebugState() : string
 		}
 		text += "]";
 	}
-	items = inv.GetItemsByTag('SLS_Always');
+	items = SLS_AlwaysItems(inv);
 	text += "; always=[";
 	for (j = 0; j < items.Size(); j += 1)
 	{
