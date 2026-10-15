@@ -2,7 +2,16 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.3 - 2026-10-14 - untested (the 'no settings save from the poll' build; the first mod.io package; then the 'horse gear' and 'horse gear locked' builds, 2026-10-15)
+## 1.0.3 - 2026-10-14 - untested (the 'no settings save from the poll' build; the first mod.io package; then the 'horse gear', 'horse gear locked' and 'always worn horse, skills' builds, 2026-10-15)
+
+* **Horse gear and the trophy can be always worn** (the owner, 2026-10-15), working exactly like Geralt's always-worn
+  pieces. Leaving the Always worn box marks what Roach wears and the trophy with `SLS_Always` = 1 (on the piece in the
+  stash the horse manager wears; saved). A switch never stores or takes off such a piece (`stays on (always worn, horse
+  gear)`). A loadout's own stored piece for the same slot wins while that loadout is on: the always-worn piece is taken
+  off through `W3HorseManager.UnequipItem` and waits in Geralt's inventory (`always worn waits (slot taken, horse
+  gear)`); when a later loadout has nothing stored for that slot it goes back on through `MoveItemToHorse` + `EquipItem`
+  (`always worn back on (horse gear)`). The per-loadout locking of the 'horse gear locked' build is unchanged.
+  `SLS_DebugState`'s `always=[...]` lists always-worn horse pieces `(horse)` or `(horse, waiting)`.
 
 * **'horse gear locked' build: horse gear is locked to its loadout, with no exception for older loadouts.** The owner's
   first test of the 'horse gear' build (all his loadouts stored by 1.0.2): *"the horse gear stayed equipped in all of
@@ -35,7 +44,7 @@ Versions are issued by the project's version gate. Written as the change happens
   (none <-> Always worn); then Roach keeps what she wears and the loadout left behind is marked as holding no horse
   gear, so going back to it leaves her alone too (`SLS_HorseMoves`). An empty loadout counts as holding horse gear
   (nothing yet), so leaving a loadout for a new one stores its horse gear, as it does the rest.
-* "Always worn" stays Geralt's own gear only.
+* "Always worn" stays Geralt's own gear only (until the 'always worn horse, skills' build).
 * Logs: `stored in loadout N (horse gear): ...`, `restored from loadout N onto the horse: ...`, `horse gear stays on:
   ...` with the reason, and the switch line ends `horse gear moved with the switch` or `horse gear stayed on`. The first
   inventory open after a load adds `horse gear kept by L1, L3` (or `no loadout holds horse gear yet`). `SLS_DebugState`

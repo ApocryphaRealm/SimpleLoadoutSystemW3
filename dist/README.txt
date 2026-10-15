@@ -31,7 +31,9 @@ HOW IT WORKS
 - Horse gear and the trophy belong to the loadout they were worn in, like the rest of the gear: switching away stores
   them in that loadout, and selecting a loadout puts its own horse gear and trophy back on - a loadout that holds none
   leaves Roach bare. They are put on and taken off the way the inventory screen does it, so Roach shows the change at
-  once when she is near, or the next time you call her when she is not. "Always worn" covers Geralt's own gear only.
+  once when she is near, or the next time you call her when she is not. Horse gear and the trophy can be always worn
+  too, exactly like Geralt's pieces: whatever is on Roach (and your trophy) when you leave "Always worn" stays on
+  through every switch, unless a loadout holds its own piece for that slot.
 - Upgrading from 1.0.2: your loadouts hold no horse gear yet. The first time you leave each one, Roach's gear and your
   trophy are stored in it; until then, selecting it leaves Roach bare (her gear is safe in the loadout you left).
 - Where the gear is kept: the stash - the one every stash chest in the world opens. Stored loadout gear is hidden from
