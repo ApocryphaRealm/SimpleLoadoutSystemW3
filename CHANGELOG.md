@@ -2,7 +2,36 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.3 - 2026-10-14 - untested (the 'no settings save from the poll' build; the first mod.io package)
+## 1.0.3 - 2026-10-14 - untested (the 'no settings save from the poll' build; the first mod.io package; then the 'horse gear' build, 2026-10-15)
+
+* **Horse gear and the trophy are part of a loadout** (the owner, 2026-10-15: *"I want the horse equipment and trophy
+  to also be able to be saved into a loadout."*). Roach's saddle, saddlebags and blinders and Geralt's trophy
+  (`EES_HorseSaddle`, `EES_HorseBag`, `EES_HorseBlinders`, `EES_HorseTrophy`) are stored when a loadout is left and put
+  back on when it is selected, like the rest of the gear:
+  * stored the same way: the `SLS_Loadout` item modifier on the stash piece (saved with the game) and the
+    `NoShowInContainer` tag, put back after a load by the same `SLS_SyncStashTags` - so stored horse pieces are hidden
+    from the stash list and from Roach's saddlebag list too;
+  * taken off and put on only through the game's own path, the one the inventory menu uses: `W3HorseManager
+    .UnequipItem(slot)` (hands the piece to Geralt's inventory), and `MoveItemToHorse` + `W3HorseManager.EquipItem`
+    from Geralt's inventory. A mod that changes those functions (The Stable's 5.01 patch replaces EquipItem and
+    UnequipItem) runs exactly as it does for the menu. `EquipItem` mounts the piece on the live horse when she is
+    spawned and `ApplyHorseUpdateOnSpawn` applies `itemSlots` when she next spawns, so SLS never touches the horse
+    entity itself; the trophy's abilities and the saddlebags' carry weight follow from the same functions;
+  * quest and kept (NoDrop) horse pieces stay on the horse; the menu's paperdoll is told (`PaperdollRemoveItem` /
+    `PaperdollUpdateHorseItem`) as the menu's own equip and unequip do.
+* **Loadouts stored before this build keep Roach's gear alone.** Each loadout carries a saved fact `sls_horse_<n>` = 1
+  once its storage holds its horse gear (none at all counts: a bare horse). A switch moves the horse gear unless the
+  target is a loadout with stored pieces but no such fact (stored by 1.0.0-1.0.2), or no loadout is on either side
+  (none <-> Always worn); then Roach keeps what she wears and the loadout left behind is marked as holding no horse
+  gear, so going back to it leaves her alone too (`SLS_HorseMoves`). An empty loadout counts as holding horse gear
+  (nothing yet), so leaving a loadout for a new one stores its horse gear, as it does the rest.
+* "Always worn" stays Geralt's own gear only.
+* Logs: `stored in loadout N (horse gear): ...`, `restored from loadout N onto the horse: ...`, `horse gear stays on:
+  ...` with the reason, and the switch line ends `horse gear moved with the switch` or `horse gear stayed on`. The first
+  inventory open after a load adds `horse gear kept by L1, L3` (or `no loadout holds horse gear yet`). `SLS_DebugState`
+  marks horse pieces `(horse)`, a loadout that keeps horse gear `+horse`, and lists what the horse wears now.
+* No new text on screen (no string-table change); the movie, bundle and settings XML are unchanged.
+* The mod.io 1.0.3 file (in CD PROJEKT RED's review) was built before this and does not have horse gear.
 
 * **Fixed: with no menu XML installed, the Loadouts setting was written and saved twice a second.** `SLS_Count` read
   an empty or missing `SimpleLoadoutSystem` / `LoadoutCount` as invalid, wrote the default and called

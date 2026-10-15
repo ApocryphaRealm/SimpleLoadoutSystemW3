@@ -19,6 +19,9 @@
 // - Nothing moves except in the switch a box's A press starts, with the inventory open (the owner's rule for every SLS).
 // - Gear: both swords, armour, gloves, trousers, boots, crossbow and bolts. Quest items and items the game will not let
 //   go (NoDrop) are only taken off, never stored; the infinite bolts are left alone.
+// - Horse gear (1.0.3, the owner: "I want the horse equipment and trophy to also be able to be saved into a loadout"):
+//   Roach's saddle, saddlebags, blinders and Geralt's trophy (EES_HorseSaddle, EES_HorseBag, EES_HorseBlinders,
+//   EES_HorseTrophy) go into and come out of a loadout like the rest of the gear - see "horse gear" below.
 // - No switching in combat.
 //
 // Storage: the shared stash - the horse manager's inventory, the one every stash in the world opens (inventoryMenu.ws:
@@ -32,6 +35,19 @@
 // .ShouldShowItem), the way 1.0.0-1.0.1 did within a session. That tag is not saved, so it is put back from the modifier
 // on every inventory open, before the menu builds its lists (SLS_SyncStashTags in the OnConfigUI wrapper): the modifier
 // is the saved truth, the tag only what the list reads. The active loadout is a fact (sls_active), saved with the game.
+//
+// Horse gear. An equipped horse item already lives in that same stash: the horse manager's inventory holds it and its
+// saved itemSlots names it (horseManager.ws). It is taken off and put on only through the game's own path, the one the
+// inventory menu uses (inventoryMenu.ws OnEquipItem / OnUnequipItem): W3HorseManager.UnequipItem(slot), which hands the
+// item to Geralt's inventory, and MoveItemToHorse + W3HorseManager.EquipItem from Geralt's inventory. Mods that change
+// horse gear (The Stable replaces EquipItem / UnequipItem) therefore run as they do for the menu, and the live horse is
+// updated by those functions when it is spawned, or from itemSlots when it next spawns (ApplyHorseUpdateOnSpawn). A
+// stored horse piece is an ordinary stored piece: SLS_Loadout on the stash item and the NoShowInContainer tag.
+// A loadout stored by 1.0.0-1.0.2 holds no horse gear, and a switch to it must not strip Roach. So each loadout carries a
+// saved fact sls_horse_<n> = 1 when its storage holds its horse gear (possibly none: a bare horse). A switch moves horse
+// gear unless the target is a loadout that holds stored pieces but no such fact (stored before horse gear was part of a
+// loadout), or no loadout is on either side (none <-> Always worn); then Roach keeps what she wears and the loadout left
+// behind is marked as holding no horse gear, so going back to it leaves her alone as well. SLS_HorseMoves decides.
 
 // ---- settings ----------------------------------------------------------------------------------------------------
 
@@ -196,9 +212,34 @@ function SLS_StashSummary(stash : CInventoryComponent) : string
 	}
 	if (total == 0)
 	{
-		return "stash holds 0 stored pieces";
+		return "stash holds 0 stored pieces" + SLS_HorseKeptSummary();
 	}
-	return "stash holds " + IntToString(total) + " stored piece(s): " + text;
+	return "stash holds " + IntToString(total) + " stored piece(s): " + text + SLS_HorseKeptSummary();
+}
+
+// "; horse gear kept by L1, L3" - the loadouts whose storage holds their horse gear (sls_horse_<n>); empty when none.
+function SLS_HorseKeptSummary() : string
+{
+	var text : string;
+	var i : int;
+
+	text = "";
+	for (i = 0; i < SLS_MaxLoadouts(); i += 1)
+	{
+		if (SLS_HorseKept(i))
+		{
+			if (text != "")
+			{
+				text += ", ";
+			}
+			text += "L" + IntToString(i + 1);
+		}
+	}
+	if (text == "")
+	{
+		return "; no loadout holds horse gear yet";
+	}
+	return "; horse gear kept by " + text;
 }
 
 // Puts the game's NoShowInContainer tag on every stash piece a loadout holds (SLS_Loadout > 0), so the stash's list
@@ -249,6 +290,165 @@ function SLS_GearSlots() : array<EEquipmentSlots>
 function SLS_MustStay(inv : CInventoryComponent, item : SItemUniqueId) : bool
 {
 	return inv.IsItemQuest(item) || (inv.ItemHasTag(item, 'NoDrop') && !inv.ItemHasTag(item, 'Lootable'));
+}
+
+// ---- horse gear --------------------------------------------------------------------------------------------------
+
+// Roach's three slots and Geralt's trophy slot (itemsTypes.ws EEquipmentSlots). Their items are held by the horse
+// manager, not by Geralt's own itemSlots.
+function SLS_HorseSlots() : array<EEquipmentSlots>
+{
+	var slots : array<EEquipmentSlots>;
+
+	slots.PushBack(EES_HorseSaddle);
+	slots.PushBack(EES_HorseBag);
+	slots.PushBack(EES_HorseBlinders);
+	slots.PushBack(EES_HorseTrophy);
+	return slots;
+}
+
+// A horse piece (saddle, saddlebags, blinders or trophy), by the game's own test (inventoryComponent.ws
+// GetHorseSlotForItem: the Saddle / HorseBag / Trophy / Blinders tags).
+function SLS_IsHorseItem(inv : CInventoryComponent, item : SItemUniqueId) : bool
+{
+	return inv.GetHorseSlotForItem(item) != EES_InvalidSlot;
+}
+
+// True when a loadout's (0..9) storage holds its horse gear - the saved fact sls_horse_<loadout + 1>, set by 1.0.3 when
+// it stores into that loadout with the horse gear moving. A loadout stored by 1.0.0-1.0.2 never has it.
+function SLS_HorseKept(loadout : int) : bool
+{
+	return FactsQuerySum("sls_horse_" + IntToString(loadout + 1)) > 0;
+}
+
+function SLS_SetHorseKept(loadout : int, holds : bool)
+{
+	FactsRemove("sls_horse_" + IntToString(loadout + 1));
+	if (holds)
+	{
+		FactsAdd("sls_horse_" + IntToString(loadout + 1), 1, -1);
+	}
+}
+
+// Whether a switch from -> to moves the horse gear (stores or takes off what Roach wears, puts on what the target holds).
+// No: when no loadout is on either side (none <-> Always worn), or when the target is a loadout that holds stored pieces
+// but no horse gear record - it was stored before horse gear was part of a loadout, and Roach keeps what she wears
+// (the owner's rule for the update). Yes otherwise: a target that holds its horse gear, an empty loadout (nothing stored
+// yet), and none / Always worn coming from a loadout - the same as the rest of the gear.
+function SLS_HorseMoves(stash : CInventoryComponent, from : int, to : int) : bool
+{
+	var target : array<SItemUniqueId>;
+
+	if (from < 0 && to < 0)
+	{
+		SLS_Log("horse gear stays on: no loadout on either side of the switch");
+		return false;
+	}
+	if (to >= 0 && !SLS_HorseKept(to))
+	{
+		// (an array a function returns cannot be asked its size in place - WitcherScript)
+		target = SLS_StoredIn(stash, to);
+	}
+	if (target.Size() > 0)
+	{
+		SLS_Log("horse gear stays on: " + SLS_Describe(to) + " was stored before horse gear was part of a loadout");
+		return false;
+	}
+	return true;
+}
+
+// Takes Roach's gear and Geralt's trophy off through the game's own path (W3HorseManager.UnequipItem, which hands each
+// piece to Geralt's inventory, as the inventory menu does); with a loadout to leave, each piece then goes to the
+// loadout's storage like any other piece. Quest and kept (NoDrop) horse pieces stay on the horse. Returns how many
+// pieces could not be stored.
+function SLS_StoreHorse(menu : CR4InventoryMenu, hm : W3HorseManager, inv : CInventoryComponent, stash : CInventoryComponent, from : int, out stored : int) : int
+{
+	var slots : array<EEquipmentSlots>;
+	var worn, back, moved : SItemUniqueId;
+	var itemName : name;
+	var i, kept : int;
+
+	slots = SLS_HorseSlots();
+	kept = 0;
+	stored = 0;
+	for (i = 0; i < slots.Size(); i += 1)
+	{
+		worn = hm.GetItemInSlot(slots[i]);
+		if (!stash.IsIdValid(worn))
+		{
+			continue;
+		}
+		itemName = stash.GetItemName(worn);
+		if (SLS_MustStay(stash, worn))
+		{
+			if (from >= 0)
+			{
+				kept += 1;
+			}
+			SLS_Log("stays on the horse, cannot be stored: " + NameToString(itemName));
+			continue;
+		}
+		// the menu's paperdoll shows the piece under its stash id, which UnequipItem gives up
+		menu.PaperdollRemoveItem(worn);
+		back = hm.UnequipItem(slots[i]);
+		if (!inv.IsIdValid(back))
+		{
+			if (from >= 0)
+			{
+				kept += 1;
+			}
+			SLS_Log("could not take " + NameToString(itemName) + " off the horse - it stays where the game left it");
+			continue;
+		}
+		if (from < 0)
+		{
+			SLS_Log("taken off the horse, stays in the inventory: " + NameToString(itemName));
+			continue;
+		}
+		moved = inv.GiveItemTo(stash, back, 1, false, false, false);
+		if (moved == GetInvalidUniqueId())
+		{
+			kept += 1;
+			SLS_Log("could not store " + NameToString(itemName) + " - it stays in the inventory");
+			continue;
+		}
+		stash.SetItemModifierInt(moved, 'SLS_Loadout', from + 1);
+		stash.AddItemTag(moved, 'NoShowInContainer');
+		stored += 1;
+		SLS_Log("stored in " + SLS_Describe(from) + " (horse gear): " + NameToString(itemName));
+	}
+	return kept;
+}
+
+// Puts a horse piece that has just come back to Geralt's inventory on the horse - the inventory menu's own path
+// (inventoryMenu.ws OnEquipItem): MoveItemToHorse, then W3HorseManager.EquipItem, which mounts it on the live horse when
+// she is spawned and is applied from itemSlots when she next spawns. Returns false when it did not end up equipped.
+function SLS_EquipHorse(menu : CR4InventoryMenu, hm : W3HorseManager, inv : CInventoryComponent, stash : CInventoryComponent, item : SItemUniqueId) : bool
+{
+	var onHorse, displaced : SItemUniqueId;
+	var itemName : name;
+
+	itemName = inv.GetItemName(item);
+	onHorse = hm.MoveItemToHorse(item, 1);
+	if (!stash.IsIdValid(onHorse))
+	{
+		SLS_Log("could not hand " + NameToString(itemName) + " to the horse - it stays in the inventory");
+		return false;
+	}
+	// a stored loadout number must never sit on a piece the horse wears (it would count as stored)
+	stash.SetItemModifierInt(onHorse, 'SLS_Loadout', 0);
+	displaced = hm.EquipItem(onHorse);
+	if (inv.IsIdValid(displaced))
+	{
+		SLS_Log("the horse's " + NameToString(inv.GetItemName(displaced)) + " was replaced and is in the inventory");
+	}
+	if (!hm.IsItemEquipped(onHorse))
+	{
+		SLS_Log("back in the stash but not put on the horse: " + NameToString(itemName));
+		return false;
+	}
+	menu.PaperdollUpdateHorseItem(onHorse);
+	return true;
 }
 
 // ---- the switch --------------------------------------------------------------------------------------------------
@@ -341,17 +541,28 @@ function SLS_StoreWorn(menu : CR4InventoryMenu, player : W3PlayerWitcher, inv : 
 	return kept;
 }
 
-// Brings a loadout's pieces back from its storage and puts each on in its own slot.
-function SLS_Restore(player : W3PlayerWitcher, inv : CInventoryComponent, stash : CInventoryComponent, to : int) : int
+// Brings a loadout's pieces back from its storage and puts each on in its own slot; a horse piece goes back on the horse
+// (SLS_EquipHorse) instead of on Geralt.
+function SLS_Restore(menu : CR4InventoryMenu, player : W3PlayerWitcher, hm : W3HorseManager, inv : CInventoryComponent, stash : CInventoryComponent, to : int) : int
 {
 	var items : array<SItemUniqueId>;
 	var back : SItemUniqueId;
 	var i, quantity, restored : int;
+	var horsePiece : bool;
+	var pieceName : name;
 
 	items = SLS_StoredIn(stash, to);
 	restored = 0;
 	for (i = 0; i < items.Size(); i += 1)
 	{
+		horsePiece = SLS_IsHorseItem(stash, items[i]);
+		if (horsePiece && hm.IsItemEquipped(items[i]))
+		{
+			// cannot happen through SLS (a worn horse piece never keeps a loadout number); never give away what the horse wears
+			stash.SetItemModifierInt(items[i], 'SLS_Loadout', 0);
+			SLS_Log("the horse wears " + NameToString(stash.GetItemName(items[i])) + " - its loadout number was cleared, it stays on");
+			continue;
+		}
 		quantity = stash.GetItemQuantity(items[i]);
 		stash.SetItemModifierInt(items[i], 'SLS_Loadout', 0);
 		stash.RemoveItemTag(items[i], 'NoShowInContainer');
@@ -366,6 +577,17 @@ function SLS_Restore(player : W3PlayerWitcher, inv : CInventoryComponent, stash 
 		}
 		// in case the move carried the modifier over: Geralt's own copy belongs to no stored loadout
 		inv.SetItemModifierInt(back, 'SLS_Loadout', 0);
+		if (horsePiece)
+		{
+			// the name first: once on the horse the piece is no longer in Geralt's inventory
+			pieceName = inv.GetItemName(back);
+			if (SLS_EquipHorse(menu, hm, inv, stash, back))
+			{
+				SLS_Log("restored from " + SLS_Describe(to) + " onto the horse: " + NameToString(pieceName));
+			}
+			restored += 1;
+			continue;
+		}
 		if (!player.EquipItem(back))
 		{
 			SLS_Log("back in the inventory but not put on: " + NameToString(inv.GetItemName(back)));
@@ -647,8 +869,10 @@ function SLS_PushBoxes()
 function SLS_Press(box : int)
 {
 	var player : W3PlayerWitcher;
+	var hm : W3HorseManager;
 	var inv, stash : CInventoryComponent;
-	var from, to, count, kept, stored, restored, always : int;
+	var from, to, count, kept, stored, restored, always, horseStored : int;
+	var horseMoves : bool;
 
 	count = SLS_Count();
 	if (box < 0 || box > count)
@@ -674,12 +898,13 @@ function SLS_Press(box : int)
 		return;
 	}
 	inv = player.GetInventory();
-	if (!player.GetHorseManager())
+	hm = player.GetHorseManager();
+	if (!hm)
 	{
 		SLS_Log("press refused: no stash (horse manager)");
 		return;
 	}
-	stash = player.GetHorseManager().GetInventoryComponent();
+	stash = hm.GetInventoryComponent();
 	if (!inv || !stash)
 	{
 		SLS_Log("press refused: an inventory is missing");
@@ -701,6 +926,9 @@ function SLS_Press(box : int)
 		to = -1;
 	}
 	SLS_Log("switch " + SLS_Describe(from) + " -> " + SLS_Describe(to));
+	// decided before anything is stored: whether the target holds horse gear (or is a loadout stored before horse gear
+	// was part of one)
+	horseMoves = SLS_HorseMoves(stash, from, to);
 
 	if (from == -2)
 	{
@@ -709,10 +937,26 @@ function SLS_Press(box : int)
 	}
 	stored = 0;
 	kept = SLS_StoreWorn(this, player, inv, stash, from, stored);
+	if (horseMoves)
+	{
+		horseStored = 0;
+		kept += SLS_StoreHorse(this, hm, inv, stash, from, horseStored);
+		stored += horseStored;
+		if (from >= 0)
+		{
+			// the loadout left behind now holds its horse gear (none at all is a bare horse)
+			SLS_SetHorseKept(from, true);
+		}
+	}
+	else if (from >= 0)
+	{
+		// Roach keeps her gear, so the loadout left behind holds none of it: going back to it leaves her alone too
+		SLS_SetHorseKept(from, false);
+	}
 	restored = 0;
 	if (to >= 0)
 	{
-		restored = SLS_Restore(player, inv, stash, to);
+		restored = SLS_Restore(this, player, hm, inv, stash, to);
 	}
 	SLS_ReapplyAlways(player, inv);
 	SLS_SetActive(to);
@@ -720,7 +964,14 @@ function SLS_Press(box : int)
 	{
 		showNotification(GetLocStringByKeyExt("sls_kept") + " " + IntToString(kept));
 	}
-	SLS_Log("switch done: stored " + IntToString(stored) + ", restored " + IntToString(restored) + ", kept " + IntToString(kept));
+	if (horseMoves)
+	{
+		SLS_Log("switch done: stored " + IntToString(stored) + " (" + IntToString(horseStored) + " horse), restored " + IntToString(restored) + ", kept " + IntToString(kept) + "; horse gear moved with the switch");
+	}
+	else
+	{
+		SLS_Log("switch done: stored " + IntToString(stored) + ", restored " + IntToString(restored) + ", kept " + IntToString(kept) + "; horse gear stayed on");
+	}
 
 	// The menu's own refresh after equipping or unequipping (inventoryMenu.ws OnEquipItem / UnequipItem): the paperdoll,
 	// the grid, the weight, the stats - and the 3D Geralt beside them, a separate GUI scene entity that only takes the
@@ -803,8 +1054,11 @@ function ShouldShowItem(item : SItemUniqueId) : bool
 function SLS_DebugState() : string
 {
 	var player : W3PlayerWitcher;
+	var hm : W3HorseManager;
 	var inv, stash : CInventoryComponent;
 	var items : array<SItemUniqueId>;
+	var slots : array<EEquipmentSlots>;
+	var worn : SItemUniqueId;
 	var text : string;
 	var i, j : int;
 
@@ -813,13 +1067,20 @@ function SLS_DebugState() : string
 	{
 		return "no player";
 	}
+	hm = player.GetHorseManager();
 	inv = player.GetInventory();
-	stash = player.GetHorseManager().GetInventoryComponent();
+	stash = hm.GetInventoryComponent();
 	text = "active=" + SLS_Describe(SLS_Active()) + "; count=" + IntToString(SLS_Count());
+	// a horse piece is marked (horse); "+horse" after a loadout = its storage holds its horse gear (sls_horse_<n>)
 	for (i = 0; i < SLS_MaxLoadouts(); i += 1)
 	{
 		items = SLS_StoredIn(stash, i);
-		text += "; L" + IntToString(i + 1) + "=[";
+		text += "; L" + IntToString(i + 1);
+		if (SLS_HorseKept(i))
+		{
+			text += "+horse";
+		}
+		text += "=[";
 		for (j = 0; j < items.Size(); j += 1)
 		{
 			if (j > 0)
@@ -827,9 +1088,33 @@ function SLS_DebugState() : string
 				text += ", ";
 			}
 			text += NameToString(stash.GetItemName(items[j])) + " x" + IntToString(stash.GetItemQuantity(items[j]));
+			if (SLS_IsHorseItem(stash, items[j]))
+			{
+				text += " (horse)";
+			}
 		}
 		text += "]";
 	}
+	// what Roach wears now (the horse manager's slots) and Geralt's trophy
+	slots = SLS_HorseSlots();
+	text += "; horse=[";
+	for (j = 0; j < slots.Size(); j += 1)
+	{
+		if (j > 0)
+		{
+			text += ", ";
+		}
+		worn = hm.GetItemInSlot(slots[j]);
+		if (stash.IsIdValid(worn))
+		{
+			text += NameToString(stash.GetItemName(worn));
+		}
+		else
+		{
+			text += "-";
+		}
+	}
+	text += "]";
 	items = SLS_AlwaysItems(inv);
 	text += "; always=[";
 	for (j = 0; j < items.Size(); j += 1)
