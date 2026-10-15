@@ -28,12 +28,12 @@ HOW IT WORKS
 - Loadout gear: both swords, armour, gloves, trousers, boots, crossbow and bolts, plus Roach's saddle, saddlebags and
   blinders and your trophy. Potions, bombs, pocket items and masks are left alone. Quest items are only taken off,
   never stored; the infinite bolts stay as they are.
-- Horse gear and the trophy go into a loadout and come back with it, like the rest of the gear. They are put on and
-  taken off the way the inventory screen does it, so Roach shows the change at once when she is near, or the next time
-  you call her when she is not. "Always worn" covers Geralt's own gear only, not the horse's.
-- Loadouts saved before version 1.0.3 hold no horse gear: switching to one leaves Roach's gear and your trophy as they
-  are. Such a loadout starts keeping horse gear the next time you switch from it to a loadout that holds horse gear, to
-  an empty loadout, or to no loadout.
+- Horse gear and the trophy belong to the loadout they were worn in, like the rest of the gear: switching away stores
+  them in that loadout, and selecting a loadout puts its own horse gear and trophy back on - a loadout that holds none
+  leaves Roach bare. They are put on and taken off the way the inventory screen does it, so Roach shows the change at
+  once when she is near, or the next time you call her when she is not. "Always worn" covers Geralt's own gear only.
+- Upgrading from 1.0.2: your loadouts hold no horse gear yet. The first time you leave each one, Roach's gear and your
+  trophy are stored in it; until then, selecting it leaves Roach bare (her gear is safe in the loadout you left).
 - Where the gear is kept: the stash - the one every stash chest in the world opens. Stored loadout gear is hidden from
   the stash's list, so it is not taken out by mistake. Loadouts and the always-worn set are saved with your game.
 - Upgrading from 1.0.0 or 1.0.1: those versions lost their loadouts at every load (the stored gear stayed in the

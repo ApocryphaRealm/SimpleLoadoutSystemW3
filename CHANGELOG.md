@@ -2,7 +2,17 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.3 - 2026-10-14 - untested (the 'no settings save from the poll' build; the first mod.io package; then the 'horse gear' build, 2026-10-15)
+## 1.0.3 - 2026-10-14 - untested (the 'no settings save from the poll' build; the first mod.io package; then the 'horse gear' and 'horse gear locked' builds, 2026-10-15)
+
+* **'horse gear locked' build: horse gear is locked to its loadout, with no exception for older loadouts.** The owner's
+  first test of the 'horse gear' build (all his loadouts stored by 1.0.2): *"the horse gear stayed equipped in all of
+  them instead of being locked into one of them."* The rule below that kept Roach's gear on for a loadout stored before
+  1.0.3 applied to every switch he made. It is gone (`SLS_HorseMoves` removed): leaving ANY loadout stores Roach's gear
+  and the trophy into it and sets `sls_horse_<n>`; entering a loadout puts on what it holds, and one that holds no horse
+  gear leaves her bare in those slots - nothing is lost, it is in the loadout left. Between none and Always worn her
+  gear is taken off into Geralt's inventory, as his own non-always-worn gear is (`SLS_StoreWorn` with no loadout to
+  leave). `sls_horse_<n>` is now read by the logs and `SLS_DebugState` only. The switch line reads `switch done: stored
+  N (H horse), restored R, kept K`.
 
 * **Horse gear and the trophy are part of a loadout** (the owner, 2026-10-15: *"I want the horse equipment and trophy
   to also be able to be saved into a loadout."*). Roach's saddle, saddlebags and blinders and Geralt's trophy
@@ -19,7 +29,7 @@ Versions are issued by the project's version gate. Written as the change happens
     entity itself; the trophy's abilities and the saddlebags' carry weight follow from the same functions;
   * quest and kept (NoDrop) horse pieces stay on the horse; the menu's paperdoll is told (`PaperdollRemoveItem` /
     `PaperdollUpdateHorseItem`) as the menu's own equip and unequip do.
-* **Loadouts stored before this build keep Roach's gear alone.** Each loadout carries a saved fact `sls_horse_<n>` = 1
+* (Replaced by the 'horse gear locked' build above.) **Loadouts stored before this build keep Roach's gear alone.** Each loadout carries a saved fact `sls_horse_<n>` = 1
   once its storage holds its horse gear (none at all counts: a bare horse). A switch moves the horse gear unless the
   target is a loadout with stored pieces but no such fact (stored by 1.0.0-1.0.2), or no loadout is on either side
   (none <-> Always worn); then Roach keeps what she wears and the loadout left behind is marked as holding no horse

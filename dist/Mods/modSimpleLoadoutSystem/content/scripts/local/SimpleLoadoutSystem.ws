@@ -21,7 +21,7 @@
 //   go (NoDrop) are only taken off, never stored; the infinite bolts are left alone.
 // - Horse gear (1.0.3, the owner: "I want the horse equipment and trophy to also be able to be saved into a loadout"):
 //   Roach's saddle, saddlebags, blinders and Geralt's trophy (EES_HorseSaddle, EES_HorseBag, EES_HorseBlinders,
-//   EES_HorseTrophy) go into and come out of a loadout like the rest of the gear - see "horse gear" below.
+//   EES_HorseTrophy) are locked to the loadout they were worn in, like the rest of the gear - see "horse gear" below.
 // - No switching in combat.
 //
 // Storage: the shared stash - the horse manager's inventory, the one every stash in the world opens (inventoryMenu.ws:
@@ -43,11 +43,13 @@
 // horse gear (The Stable replaces EquipItem / UnequipItem) therefore run as they do for the menu, and the live horse is
 // updated by those functions when it is spawned, or from itemSlots when it next spawns (ApplyHorseUpdateOnSpawn). A
 // stored horse piece is an ordinary stored piece: SLS_Loadout on the stash item and the NoShowInContainer tag.
-// A loadout stored by 1.0.0-1.0.2 holds no horse gear, and a switch to it must not strip Roach. So each loadout carries a
-// saved fact sls_horse_<n> = 1 when its storage holds its horse gear (possibly none: a bare horse). A switch moves horse
-// gear unless the target is a loadout that holds stored pieces but no such fact (stored before horse gear was part of a
-// loadout), or no loadout is on either side (none <-> Always worn); then Roach keeps what she wears and the loadout left
-// behind is marked as holding no horse gear, so going back to it leaves her alone as well. SLS_HorseMoves decides.
+// Horse gear is locked to the loadout it was worn in, like Geralt's gear (the owner's first test, 2026-10-15: with an
+// exception that kept Roach's gear on for loadouts stored before 1.0.3, "the horse gear stayed equipped in all of them
+// instead of being locked into one of them"). Leaving ANY loadout stores what Roach wears into it; entering one puts on
+// what it holds, and a loadout that holds no horse gear leaves her bare in those slots - nothing is lost, it is in the
+// loadout that was left. Between none and Always worn her gear is taken off into Geralt's inventory, as his own is.
+// The saved fact sls_horse_<n> = 1 records that a loadout's storage holds its horse gear (for the logs and
+// SLS_DebugState only; no decision reads it).
 
 // ---- settings ----------------------------------------------------------------------------------------------------
 
@@ -314,8 +316,8 @@ function SLS_IsHorseItem(inv : CInventoryComponent, item : SItemUniqueId) : bool
 	return inv.GetHorseSlotForItem(item) != EES_InvalidSlot;
 }
 
-// True when a loadout's (0..9) storage holds its horse gear - the saved fact sls_horse_<loadout + 1>, set by 1.0.3 when
-// it stores into that loadout with the horse gear moving. A loadout stored by 1.0.0-1.0.2 never has it.
+// True when a loadout's (0..9) storage holds its horse gear - the saved fact sls_horse_<loadout + 1>, set by 1.0.3 every
+// time it stores into that loadout. A loadout last stored by 1.0.0-1.0.2 does not have it. Read by the logs only.
 function SLS_HorseKept(loadout : int) : bool
 {
 	return FactsQuerySum("sls_horse_" + IntToString(loadout + 1)) > 0;
@@ -328,33 +330,6 @@ function SLS_SetHorseKept(loadout : int, holds : bool)
 	{
 		FactsAdd("sls_horse_" + IntToString(loadout + 1), 1, -1);
 	}
-}
-
-// Whether a switch from -> to moves the horse gear (stores or takes off what Roach wears, puts on what the target holds).
-// No: when no loadout is on either side (none <-> Always worn), or when the target is a loadout that holds stored pieces
-// but no horse gear record - it was stored before horse gear was part of a loadout, and Roach keeps what she wears
-// (the owner's rule for the update). Yes otherwise: a target that holds its horse gear, an empty loadout (nothing stored
-// yet), and none / Always worn coming from a loadout - the same as the rest of the gear.
-function SLS_HorseMoves(stash : CInventoryComponent, from : int, to : int) : bool
-{
-	var target : array<SItemUniqueId>;
-
-	if (from < 0 && to < 0)
-	{
-		SLS_Log("horse gear stays on: no loadout on either side of the switch");
-		return false;
-	}
-	if (to >= 0 && !SLS_HorseKept(to))
-	{
-		// (an array a function returns cannot be asked its size in place - WitcherScript)
-		target = SLS_StoredIn(stash, to);
-	}
-	if (target.Size() > 0)
-	{
-		SLS_Log("horse gear stays on: " + SLS_Describe(to) + " was stored before horse gear was part of a loadout");
-		return false;
-	}
-	return true;
 }
 
 // Takes Roach's gear and Geralt's trophy off through the game's own path (W3HorseManager.UnequipItem, which hands each
@@ -872,7 +847,6 @@ function SLS_Press(box : int)
 	var hm : W3HorseManager;
 	var inv, stash : CInventoryComponent;
 	var from, to, count, kept, stored, restored, always, horseStored : int;
-	var horseMoves : bool;
 
 	count = SLS_Count();
 	if (box < 0 || box > count)
@@ -926,9 +900,6 @@ function SLS_Press(box : int)
 		to = -1;
 	}
 	SLS_Log("switch " + SLS_Describe(from) + " -> " + SLS_Describe(to));
-	// decided before anything is stored: whether the target holds horse gear (or is a loadout stored before horse gear
-	// was part of one)
-	horseMoves = SLS_HorseMoves(stash, from, to);
 
 	if (from == -2)
 	{
@@ -937,21 +908,15 @@ function SLS_Press(box : int)
 	}
 	stored = 0;
 	kept = SLS_StoreWorn(this, player, inv, stash, from, stored);
-	if (horseMoves)
+	// Roach's gear and the trophy are locked to the loadout they were worn in: stored into the loadout left (any loadout,
+	// also one stored before 1.0.3), or taken off into the inventory from none / Always worn - as Geralt's gear is
+	horseStored = 0;
+	kept += SLS_StoreHorse(this, hm, inv, stash, from, horseStored);
+	stored += horseStored;
+	if (from >= 0)
 	{
-		horseStored = 0;
-		kept += SLS_StoreHorse(this, hm, inv, stash, from, horseStored);
-		stored += horseStored;
-		if (from >= 0)
-		{
-			// the loadout left behind now holds its horse gear (none at all is a bare horse)
-			SLS_SetHorseKept(from, true);
-		}
-	}
-	else if (from >= 0)
-	{
-		// Roach keeps her gear, so the loadout left behind holds none of it: going back to it leaves her alone too
-		SLS_SetHorseKept(from, false);
+		// the loadout left behind now holds its horse gear (none at all is a bare horse)
+		SLS_SetHorseKept(from, true);
 	}
 	restored = 0;
 	if (to >= 0)
@@ -964,14 +929,7 @@ function SLS_Press(box : int)
 	{
 		showNotification(GetLocStringByKeyExt("sls_kept") + " " + IntToString(kept));
 	}
-	if (horseMoves)
-	{
-		SLS_Log("switch done: stored " + IntToString(stored) + " (" + IntToString(horseStored) + " horse), restored " + IntToString(restored) + ", kept " + IntToString(kept) + "; horse gear moved with the switch");
-	}
-	else
-	{
-		SLS_Log("switch done: stored " + IntToString(stored) + ", restored " + IntToString(restored) + ", kept " + IntToString(kept) + "; horse gear stayed on");
-	}
+	SLS_Log("switch done: stored " + IntToString(stored) + " (" + IntToString(horseStored) + " horse), restored " + IntToString(restored) + ", kept " + IntToString(kept));
 
 	// The menu's own refresh after equipping or unequipping (inventoryMenu.ws OnEquipItem / UnequipItem): the paperdoll,
 	// the grid, the weight, the stats - and the 3D Geralt beside them, a separate GUI scene entity that only takes the
