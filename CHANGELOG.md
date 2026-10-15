@@ -23,10 +23,18 @@ Versions are issued by the project's version gate. Written as the change happens
   * Only what Geralt still has comes back: a skill no longer learned, a locked skill or mutagen slot, or a mutagen no
     longer in the inventory is skipped and logged. Mutagens stay in his inventory; one is found again by name among
     his unequipped mutagens (`MutagenIngredient`), searched again per slot because equipping from a stack splits it.
-  * The mutagen colour-match multiplier (`mutagen_color_*_x`) is added only by the character screen while it draws its
-    groups. After a switch that changes skills or mutagens SLS removes the multiplier the old layout left (the screen's
-    own list plus Yellow Mutagens' yellow ones), so no unearned bonus stays; opening the character screen adds the
-    right one back.
+  * **The mutagen colour-match multiplier is set by SLS itself** ('colour bonus' build; the owner: *"is there no way
+    around the color matching bonus issue?"*). The game adds it only in the character screen, while it draws its slot
+    groups (`characterMenuDupe.ws` `UpdateGroupsData`: `RemoveMutagenBonus`, then `GetGroupBonusDescription` for
+    groups 1-4) - a private menu method. `SLS_ApplyColourBonus` repeats that calculation from the same game data after
+    every switch that changes skills or mutagens: the same removal (the screen's 22 names, 20 times each, plus Yellow
+    Mutagens' 3 yellow names), then per group the mutagen in `GetMutagenSlotIDFromGroupID`'s slot,
+    `count = 1 + GetGroupBonusCount(GetSkillMutagenColor(mutagen), group)`, and `count - 1` of the `_x` ability for its
+    `GetMutagenBonusAbilityName` (none for a rare mutagen, as the screen), plus Yellow Mutagens' yellow `_x` for its
+    yellow bonus names (its wrap of `GetSkillMutagenColor` applies to the call itself). Opening the screen afterwards
+    removes and adds back exactly the same abilities. Log: `colour bonus set as the character screen sets it: g1=<mutagen>
+    <ability> xN ...`. The abilities are saved with the game (their names are in the owner's saves' name tables), so a
+    load needs nothing. (The earlier 'always worn horse, skills' build only removed the old multiplier.)
   * No new on-screen text (logs only, English as tool text); no string-table change.
 * **Horse gear and the trophy can be always worn** (the owner, 2026-10-15), working exactly like Geralt's always-worn
   pieces. Leaving the Always worn box marks what Roach wears and the trophy with `SLS_Always` = 1 (on the piece in the

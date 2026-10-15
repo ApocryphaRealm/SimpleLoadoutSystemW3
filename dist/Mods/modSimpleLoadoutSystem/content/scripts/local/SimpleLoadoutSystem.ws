@@ -461,10 +461,15 @@ function SLS_EquipHorse(menu : CR4InventoryMenu, hm : W3HorseManager, inv : CInv
 // loadout puts the always-worn sets in. Entering the Always worn box puts the always-worn sets in when they exist, and
 // otherwise leaves skills and mutagens as they are, so the first always-worn set starts from what is equipped.
 // The colour-match multiplier of a mutagen (the mutagen_color_*_x abilities) is not set by the equip functions: the
-// character screen adds it while it draws its slot groups (GetGroupBonusDescription) and removes it first
-// (RemoveMutagenBonus). SLS cannot run that private drawing code, so after it changes skills or mutagens it removes the
-// multiplier the old layout left (the same ability names, Yellow Mutagens' yellow ones included), so no bonus is kept
-// that the new layout does not earn; opening the character screen adds the right one back.
+// character screen adds it while it draws its slot groups (characterMenuDupe.ws UpdateGroupsData: RemoveMutagenBonus,
+// then GetGroupBonusDescription for groups 1-4), a private menu method SLS cannot reach. SLS_ApplyColourBonus does the
+// same calculation from the same game data after every switch that changes skills or mutagens: it removes the same
+// ability names the same way, then per group takes the mutagen in GetMutagenSlotIDFromGroupID's slot, counts
+// 1 + GetGroupBonusCount(GetSkillMutagenColor(mutagen), group) and adds count - 1 of the _x ability that belongs to the
+// mutagen's GetMutagenBonusAbilityName (none for a rare mutagen, as the screen). Yellow Mutagens' additions are
+// mirrored: its wrap of GetSkillMutagenColor applies to the call itself, and the three yellow _x abilities its wrap of
+// GetGroupBonusDescription adds are added the same way. So opening the screen afterwards removes and adds back exactly
+// the same abilities. The abilities are saved with the game (they are in the saves' name tables), so a load needs nothing.
 
 // Set index: 0..9 a loadout, -2 the always-worn set.
 function SLS_SetTag(which : int) : string
@@ -770,11 +775,49 @@ function SLS_ApplyMutagens(player : W3PlayerWitcher, inv : CInventoryComponent, 
 	return n;
 }
 
-// Removes the mutagen colour-match multiplier the previous layout left (the character screen's RemoveMutagenBonus list,
-// plus Yellow Mutagens' yellow ones); the character screen adds the right one back when it is next opened.
-function SLS_ClearColourBonus(player : W3PlayerWitcher)
+// The screen's own mapping (characterMenuDupe.ws GetGroupBonusDescription): a mutagen's bonus ability -> the colour-match
+// _x ability added once per matching skill. '' when the name is none of them.
+function SLS_ColourAbility(bonus : name) : name
 {
-	var i : int;
+	switch (bonus)
+	{
+		case 'mutagen_color_red_synergy_bonus': return 'mutagen_color_red_x';
+		case 'mutagen_color_green_synergy_bonus': return 'mutagen_color_green_x';
+		case 'mutagen_color_blue_synergy_bonus': return 'mutagen_color_blue_x';
+		case 'mutagen_color_lesser_red_synergy_bonus': return 'lesser_mutagen_color_red_x';
+		case 'mutagen_color_lesser_green_synergy_bonus': return 'lesser_mutagen_color_green_x';
+		case 'mutagen_color_lesser_blue_synergy_bonus': return 'lesser_mutagen_color_blue_x';
+		case 'greater_mutagen_color_red_synergy_bonus': return 'greater_mutagen_color_red_x';
+		case 'greater_mutagen_color_green_synergy_bonus': return 'greater_mutagen_color_green_x';
+		case 'greater_mutagen_color_blue_synergy_bonus': return 'greater_mutagen_color_blue_x';
+		case 'greater_mutagen_color_white_synergy_bonus': return 'greater_mutagen_color_white_x';
+	}
+	return '';
+}
+
+// Yellow Mutagens' wrap of GetGroupBonusDescription adds these after the screen's own (for any mutagen, rare or not).
+function SLS_YellowColourAbility(bonus : name) : name
+{
+	switch (bonus)
+	{
+		case 'greater_mutagen_color_yellow_synergy_bonus': return 'greater_mutagen_color_yellow_x';
+		case 'mutagen_color_yellow_synergy_bonus': return 'mutagen_color_yellow_x';
+		case 'mutagen_color_lesser_yellow_synergy_bonus': return 'lesser_mutagen_color_yellow_x';
+	}
+	return '';
+}
+
+// Sets the mutagen colour-match multiplier for the layout now equipped, exactly as the character screen does when it is
+// opened (see "skills and mutagens" above): the screen's RemoveMutagenBonus (plus Yellow Mutagens' yellow names), then
+// per slot group 1-4 the _x ability count - 1 times. Logs what each group got, so a test can compare it with the
+// screen's own result.
+function SLS_ApplyColourBonus(player : W3PlayerWitcher, inv : CInventoryComponent)
+{
+	var pam : W3PlayerAbilityManager;
+	var mutagen : SItemUniqueId;
+	var bonus, ability, yellow : name;
+	var i, groupId, count : int;
+	var text : string;
 
 	for (i = 0; i < 20; i += 1)
 	{
@@ -804,7 +847,44 @@ function SLS_ClearColourBonus(player : W3PlayerWitcher)
 		player.RemoveAbility('mutagen_color_yellow_x');
 		player.RemoveAbility('lesser_mutagen_color_yellow_x');
 	}
-	SLS_Log("mutagen colour-match multiplier cleared - the character screen sets it again when it is opened");
+	pam = (W3PlayerAbilityManager)player.abilityManager;
+	if (!pam)
+	{
+		SLS_Log("colour bonus: no ability manager - the multiplier was removed and not set again");
+		return;
+	}
+	text = "";
+	for (groupId = 1; groupId <= 4; groupId += 1)
+	{
+		if (!player.GetItemEquippedOnSlot(player.GetMutagenSlotIDFromGroupID(groupId), mutagen))
+		{
+			text += " g" + IntToString(groupId) + "=none";
+			continue;
+		}
+		count = 1 + player.GetGroupBonusCount(inv.GetSkillMutagenColor(mutagen), groupId);
+		bonus = pam.GetMutagenBonusAbilityName(mutagen);
+		text += " g" + IntToString(groupId) + "=" + NameToString(inv.GetItemName(mutagen));
+		if (!pam.IsMutagenRare(mutagen))
+		{
+			ability = SLS_ColourAbility(bonus);
+			if (ability != '')
+			{
+				player.AddAbilityMultiple(ability, count - 1);
+				text += " " + NameToString(ability) + " x" + IntToString(count - 1);
+			}
+		}
+		else
+		{
+			text += " (rare: no multiplier, as the screen)";
+		}
+		yellow = SLS_YellowColourAbility(bonus);
+		if (yellow != '')
+		{
+			player.AddAbilityMultiple(yellow, count - 1);
+			text += " " + NameToString(yellow) + " x" + IntToString(count - 1);
+		}
+	}
+	SLS_Log("colour bonus set as the character screen sets it:" + text);
 }
 
 // The skills-and-mutagens half of a switch: record what the loadout (or Always worn box) being left has, then put in
@@ -850,7 +930,7 @@ function SLS_SwitchSkills(player : W3PlayerWitcher, inv : CInventoryComponent, f
 	}
 	if (changed)
 	{
-		SLS_ClearColourBonus(player);
+		SLS_ApplyColourBonus(player, inv);
 	}
 }
 
