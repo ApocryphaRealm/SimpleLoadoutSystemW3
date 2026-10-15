@@ -4,6 +4,30 @@ Versions are issued by the project's version gate. Written as the change happens
 
 ## 1.0.3 - 2026-10-14 - untested (the 'no settings save from the poll' build; the first mod.io package; then the 'horse gear', 'horse gear locked' and 'always worn horse, skills' builds, 2026-10-15)
 
+* **Each loadout remembers its skills and mutagens, with the always-worn set as the fallback** (the owner, 2026-10-15:
+  *"i want the loadout to remember which skills and mutagens were equipped in that loadout as well so it acts the same
+  by unequipping everything on a new loadout and obviously only currently known and activated abilities can be saved in
+  the loadout"*, then *"make it also affected by the always worn so that loadouts that dont have a set of skills and
+  abilities and mutagens will use the always worn set"*).
+  * 5.01's character screen (`characterMenuDupe.ws`, the Remastered tree) still equips through the slot system, and SLS
+    uses its calls: `EquipSkill(skill, slotID)` / `UnequipSkill(slotID)` and, for mutagens,
+    `EquipItemInGivenSlot(item, EES_SkillMutagenN, false)` / `UnequipItemFromSlot(slot)`.
+  * Leaving a loadout records the skills in Geralt's unlocked skill slots and the mutagens in his four mutagen slots;
+    leaving the Always worn box records the always-worn set. Saved facts: `sls_sk_<set>_<slotID>` (the skill),
+    `sls_skn_<set>` (count), `sls_mutg_<set>` (record number g), `sls_muts_<set>_<g>_<k>` and
+    `sls_mut_<set>_<g>_<k>_<item name>` (the mutagen, by name); `<set>` is L1..L10 or A.
+  * Entering a loadout takes every skill and mutagen out and puts its own set in. A loadout with no skill set gets the
+    always-worn skill set; mutagens are decided the same way, separately (a whole-set fallback). No loadout gets the
+    always-worn sets. Entering the Always worn box puts the always-worn sets in when they exist, otherwise leaves skills
+    and mutagens as they are, so the first always-worn set starts from what is equipped.
+  * Only what Geralt still has comes back: a skill no longer learned, a locked skill or mutagen slot, or a mutagen no
+    longer in the inventory is skipped and logged. Mutagens stay in his inventory; one is found again by name among
+    his unequipped mutagens (`MutagenIngredient`), searched again per slot because equipping from a stack splits it.
+  * The mutagen colour-match multiplier (`mutagen_color_*_x`) is added only by the character screen while it draws its
+    groups. After a switch that changes skills or mutagens SLS removes the multiplier the old layout left (the screen's
+    own list plus Yellow Mutagens' yellow ones), so no unearned bonus stays; opening the character screen adds the
+    right one back.
+  * No new on-screen text (logs only, English as tool text); no string-table change.
 * **Horse gear and the trophy can be always worn** (the owner, 2026-10-15), working exactly like Geralt's always-worn
   pieces. Leaving the Always worn box marks what Roach wears and the trophy with `SLS_Always` = 1 (on the piece in the
   stash the horse manager wears; saved). A switch never stores or takes off such a piece (`stays on (always worn, horse

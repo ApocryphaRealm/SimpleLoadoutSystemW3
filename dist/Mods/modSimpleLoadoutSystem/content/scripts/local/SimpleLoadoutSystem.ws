@@ -24,6 +24,10 @@
 //   EES_HorseTrophy) are locked to the loadout they were worn in, like the rest of the gear - see "horse gear" below.
 //   They can be always worn too, exactly like Geralt's pieces (SLS_Always on the piece; a loadout's own piece for the
 //   slot wins while that loadout is on, and the always-worn one goes back on when the slot is free).
+// - Skills and mutagens (1.0.3, the owner: "i want the loadout to remember which skills and mutagens were equipped in
+//   that loadout as well ... only currently known and activated abilities can be saved in the loadout", and "make it
+//   also affected by the always worn so that loadouts that dont have a set of skills and abilities and mutagens will use
+//   the always worn set"): see "skills and mutagens" below.
 // - No switching in combat.
 //
 // Storage: the shared stash - the horse manager's inventory, the one every stash in the world opens (inventoryMenu.ws:
@@ -432,6 +436,428 @@ function SLS_EquipHorse(menu : CR4InventoryMenu, hm : W3HorseManager, inv : CInv
 	}
 	menu.PaperdollUpdateHorseItem(onHorse);
 	return onHorse;
+}
+
+// ---- skills and mutagens -----------------------------------------------------------------------------------------
+//
+// Each loadout remembers the skills in Geralt's skill slots and the mutagens in his four mutagen slots, and so does the
+// always-worn set. 5.01's character screen (characterMenuDupe.ws, the Remastered tree) still equips through the slot
+// system, and SLS uses exactly its calls: CR4Player.EquipSkill(skill, slotID) / UnequipSkill(slotID), and for mutagens
+// W3PlayerWitcher.EquipItemInGivenSlot(item, EES_SkillMutagenN, false) / UnequipItemFromSlot(slot) - so the skill
+// abilities, the slot groups' colours and the mutagens' own bonuses are applied by the game's ability manager as they
+// are for the menu. EquipSkill refuses a skill no longer learned and a locked slot; EquipItemInGivenSlot refuses a locked
+// mutagen slot and splits one mutagen off a stack.
+// Stored as saved facts (the game keeps facts with the save, as it does sls_active):
+//   sls_sk_<set>_<slotID> = the skill (ESkill as int) in that slot, sls_skn_<set> = how many skills the set holds;
+//   sls_mutg_<set> = the set's record number g, sls_muts_<set>_<g>_<k> = 1 when mutagen slot k was filled,
+//   sls_mut_<set>_<g>_<k>_<item name> = 1 naming the mutagen (an item name can only be kept in a fact's id: facts hold
+//   numbers, and WitcherScript has no text-to-name). A new record takes a new number g, so an older record is never read.
+//   <set> is L1..L10 for a loadout, A for the always-worn set.
+// Mutagens stay in Geralt's inventory; the right ones are only put in the slots. A mutagen is found again by its name
+// among his unequipped mutagens (MutagenIngredient), so a stack or two identical mutagens both work.
+// The rules: leaving a loadout records its skills and mutagens; leaving the Always worn box records the always-worn set.
+// Entering a loadout takes every skill and mutagen out and puts its own set in - or, when it holds no skill set (none
+// recorded, or none in it), the always-worn skill set; mutagens are decided the same way, separately. Switching to no
+// loadout puts the always-worn sets in. Entering the Always worn box puts the always-worn sets in when they exist, and
+// otherwise leaves skills and mutagens as they are, so the first always-worn set starts from what is equipped.
+// The colour-match multiplier of a mutagen (the mutagen_color_*_x abilities) is not set by the equip functions: the
+// character screen adds it while it draws its slot groups (GetGroupBonusDescription) and removes it first
+// (RemoveMutagenBonus). SLS cannot run that private drawing code, so after it changes skills or mutagens it removes the
+// multiplier the old layout left (the same ability names, Yellow Mutagens' yellow ones included), so no bonus is kept
+// that the new layout does not earn; opening the character screen adds the right one back.
+
+// Set index: 0..9 a loadout, -2 the always-worn set.
+function SLS_SetTag(which : int) : string
+{
+	if (which == -2)
+	{
+		return "A";
+	}
+	return "L" + IntToString(which + 1);
+}
+
+function SLS_SetFact(id : string, value : int)
+{
+	FactsRemove(id);
+	if (value != 0)
+	{
+		FactsAdd(id, value, -1);
+	}
+}
+
+function SLS_MutagenSlots() : array<EEquipmentSlots>
+{
+	var slots : array<EEquipmentSlots>;
+
+	slots.PushBack(EES_SkillMutagen1);
+	slots.PushBack(EES_SkillMutagen2);
+	slots.PushBack(EES_SkillMutagen3);
+	slots.PushBack(EES_SkillMutagen4);
+	return slots;
+}
+
+function SLS_SkillCount(which : int) : int
+{
+	return FactsQuerySum("sls_skn_" + SLS_SetTag(which));
+}
+
+function SLS_MutagenCount(which : int) : int
+{
+	return FactsQuerySum("sls_mutn_" + SLS_SetTag(which));
+}
+
+function SLS_MutKey(tag : string, g : int, k : int, itemName : name) : string
+{
+	return "sls_mut_" + tag + "_" + IntToString(g) + "_" + IntToString(k) + "_" + NameToString(itemName);
+}
+
+// Records the skills in Geralt's unlocked skill slots as a set's skills.
+function SLS_RecordSkills(player : W3PlayerWitcher, which : int) : int
+{
+	var slots : array<SSkillSlot>;
+	var tag, text : string;
+	var i, n : int;
+
+	tag = SLS_SetTag(which);
+	slots = player.GetSkillSlots();
+	n = 0;
+	text = "";
+	for (i = 0; i < slots.Size(); i += 1)
+	{
+		if (slots[i].unlocked && slots[i].socketedSkill != S_SUndefined)
+		{
+			SLS_SetFact("sls_sk_" + tag + "_" + IntToString(slots[i].id), (int)slots[i].socketedSkill);
+			if (n > 0)
+			{
+				text += ", ";
+			}
+			text += NameToString(SkillEnumToName(slots[i].socketedSkill));
+			n += 1;
+		}
+		else
+		{
+			SLS_SetFact("sls_sk_" + tag + "_" + IntToString(slots[i].id), 0);
+		}
+	}
+	SLS_SetFact("sls_skn_" + tag, n);
+	SLS_Log("skills recorded for " + SLS_Describe(which) + ": " + IntToString(n) + " [" + text + "]");
+	return n;
+}
+
+// Records the mutagens in Geralt's four mutagen slots as a set's mutagens, under a new record number.
+function SLS_RecordMutagens(player : W3PlayerWitcher, inv : CInventoryComponent, which : int) : int
+{
+	var slots : array<EEquipmentSlots>;
+	var all : array<SItemUniqueId>;
+	var item : SItemUniqueId;
+	var tag, text : string;
+	var i, k, g, oldG, n : int;
+
+	tag = SLS_SetTag(which);
+	oldG = FactsQuerySum("sls_mutg_" + tag);
+	g = oldG + 1;
+	// the previous record's facts are removed for every mutagen Geralt holds (one he no longer holds keeps a fact under
+	// the old number, which is never read again)
+	if (oldG > 0)
+	{
+		inv.GetAllItems(all);
+		for (i = 0; i < all.Size(); i += 1)
+		{
+			if (inv.ItemHasTag(all[i], 'MutagenIngredient'))
+			{
+				for (k = 1; k <= 4; k += 1)
+				{
+					FactsRemove(SLS_MutKey(tag, oldG, k, inv.GetItemName(all[i])));
+				}
+			}
+		}
+		for (k = 1; k <= 4; k += 1)
+		{
+			FactsRemove("sls_muts_" + tag + "_" + IntToString(oldG) + "_" + IntToString(k));
+		}
+	}
+	SLS_SetFact("sls_mutg_" + tag, g);
+	slots = SLS_MutagenSlots();
+	n = 0;
+	text = "";
+	for (k = 1; k <= 4; k += 1)
+	{
+		if (player.GetItemEquippedOnSlot(slots[k - 1], item) && inv.IsIdValid(item))
+		{
+			FactsAdd(SLS_MutKey(tag, g, k, inv.GetItemName(item)), 1, -1);
+			FactsAdd("sls_muts_" + tag + "_" + IntToString(g) + "_" + IntToString(k), 1, -1);
+			if (n > 0)
+			{
+				text += ", ";
+			}
+			text += IntToString(k) + ":" + NameToString(inv.GetItemName(item));
+			n += 1;
+		}
+	}
+	SLS_SetFact("sls_mutn_" + tag, n);
+	SLS_Log("mutagens recorded for " + SLS_Describe(which) + ": " + IntToString(n) + " [" + text + "]");
+	return n;
+}
+
+// Which set's skills (or mutagens) a switch puts in: the target loadout's own set, or the always-worn set when the target
+// holds none or is no loadout. -3 = leave skills (mutagens) as they are (entering the Always worn box with no always-worn
+// set yet).
+function SLS_SkillSource(to : int, skills : bool) : int
+{
+	var own, always : int;
+
+	if (skills)
+	{
+		always = SLS_SkillCount(-2);
+	}
+	else
+	{
+		always = SLS_MutagenCount(-2);
+	}
+	if (to >= 0)
+	{
+		if (skills)
+		{
+			own = SLS_SkillCount(to);
+		}
+		else
+		{
+			own = SLS_MutagenCount(to);
+		}
+		if (own > 0)
+		{
+			return to;
+		}
+		return -2;
+	}
+	if (to == -2 && always <= 0)
+	{
+		return -3;
+	}
+	return -2;
+}
+
+// Takes every skill out of Geralt's slots and puts a set's skills in (only skills he still knows, only slots still
+// unlocked; each skip is logged).
+function SLS_ApplySkills(player : W3PlayerWitcher, src : int) : int
+{
+	var slots : array<SSkillSlot>;
+	var skill : ESkill;
+	var tag : string;
+	var i, v, n : int;
+
+	slots = player.GetSkillSlots();
+	for (i = 0; i < slots.Size(); i += 1)
+	{
+		if (slots[i].socketedSkill != S_SUndefined)
+		{
+			player.UnequipSkill(slots[i].id);
+		}
+	}
+	if (SLS_SkillCount(src) <= 0)
+	{
+		SLS_Log("skills: " + SLS_Describe(src) + " holds no skill set - no skills equipped");
+		return 0;
+	}
+	tag = SLS_SetTag(src);
+	slots = player.GetSkillSlots();
+	n = 0;
+	for (i = 0; i < slots.Size(); i += 1)
+	{
+		v = FactsQuerySum("sls_sk_" + tag + "_" + IntToString(slots[i].id));
+		if (v <= 0)
+		{
+			continue;
+		}
+		skill = (ESkill)v;
+		if (!player.HasLearnedSkill(skill))
+		{
+			SLS_Log("skill skipped, no longer learned: " + NameToString(SkillEnumToName(skill)) + " (slot " + IntToString(slots[i].id) + ")");
+			continue;
+		}
+		if (player.GetSkillSlotIndex(slots[i].id, true) < 0)
+		{
+			SLS_Log("skill skipped, slot " + IntToString(slots[i].id) + " is locked: " + NameToString(SkillEnumToName(skill)));
+			continue;
+		}
+		if (player.EquipSkill(skill, slots[i].id))
+		{
+			n += 1;
+		}
+		else
+		{
+			SLS_Log("skill not equipped (the game refused): " + NameToString(SkillEnumToName(skill)) + " (slot " + IntToString(slots[i].id) + ")");
+		}
+	}
+	SLS_Log("skills: " + IntToString(n) + " equipped from " + SLS_Describe(src));
+	return n;
+}
+
+// An unequipped mutagen in Geralt's inventory that a set names for mutagen slot k (record g); searched again for every
+// slot, because equipping one from a stack splits the stack into a new item.
+function SLS_FindMutagen(player : W3PlayerWitcher, inv : CInventoryComponent, tag : string, g : int, k : int) : SItemUniqueId
+{
+	var all : array<SItemUniqueId>;
+	var i : int;
+
+	inv.GetAllItems(all);
+	for (i = 0; i < all.Size(); i += 1)
+	{
+		if (inv.ItemHasTag(all[i], 'MutagenIngredient') && !player.IsItemEquipped(all[i])
+			&& FactsQuerySum(SLS_MutKey(tag, g, k, inv.GetItemName(all[i]))) > 0)
+		{
+			return all[i];
+		}
+	}
+	return GetInvalidUniqueId();
+}
+
+// Takes every mutagen out of Geralt's four mutagen slots (they stay in his inventory) and puts a set's mutagens in (only
+// mutagens still in the inventory, only slots still unlocked; each skip is logged).
+function SLS_ApplyMutagens(player : W3PlayerWitcher, inv : CInventoryComponent, src : int) : int
+{
+	var slots : array<EEquipmentSlots>;
+	var item, worn : SItemUniqueId;
+	var pam : W3PlayerAbilityManager;
+	var tag : string;
+	var k, g, n : int;
+
+	slots = SLS_MutagenSlots();
+	for (k = 0; k < slots.Size(); k += 1)
+	{
+		if (player.GetItemEquippedOnSlot(slots[k], item))
+		{
+			player.UnequipItemFromSlot(slots[k]);
+		}
+	}
+	if (SLS_MutagenCount(src) <= 0)
+	{
+		SLS_Log("mutagens: " + SLS_Describe(src) + " holds no mutagens - none equipped");
+		return 0;
+	}
+	tag = SLS_SetTag(src);
+	g = FactsQuerySum("sls_mutg_" + tag);
+	pam = (W3PlayerAbilityManager)player.abilityManager;
+	n = 0;
+	for (k = 1; k <= 4; k += 1)
+	{
+		if (FactsQuerySum("sls_muts_" + tag + "_" + IntToString(g) + "_" + IntToString(k)) <= 0)
+		{
+			continue;
+		}
+		if (pam && !pam.IsSkillMutagenSlotUnlocked(slots[k - 1]))
+		{
+			SLS_Log("mutagen skipped, mutagen slot " + IntToString(k) + " is locked");
+			continue;
+		}
+		item = SLS_FindMutagen(player, inv, tag, g, k);
+		if (!inv.IsIdValid(item))
+		{
+			SLS_Log("mutagen skipped, the one recorded for slot " + IntToString(k) + " is not in the inventory any more");
+			continue;
+		}
+		player.EquipItemInGivenSlot(item, slots[k - 1], false);
+		if (player.GetItemEquippedOnSlot(slots[k - 1], worn) && inv.IsIdValid(worn))
+		{
+			n += 1;
+		}
+		else
+		{
+			SLS_Log("mutagen not equipped (the game refused): " + NameToString(inv.GetItemName(item)) + " (slot " + IntToString(k) + ")");
+		}
+	}
+	SLS_Log("mutagens: " + IntToString(n) + " equipped from " + SLS_Describe(src));
+	return n;
+}
+
+// Removes the mutagen colour-match multiplier the previous layout left (the character screen's RemoveMutagenBonus list,
+// plus Yellow Mutagens' yellow ones); the character screen adds the right one back when it is next opened.
+function SLS_ClearColourBonus(player : W3PlayerWitcher)
+{
+	var i : int;
+
+	for (i = 0; i < 20; i += 1)
+	{
+		player.RemoveAbility('greater_mutagen_color_blue_green_blue_x');
+		player.RemoveAbility('greater_mutagen_color_blue_green_green_x');
+		player.RemoveAbility('greater_mutagen_color_blue_white_blue_x');
+		player.RemoveAbility('greater_mutagen_color_blue_white_white_x');
+		player.RemoveAbility('greater_mutagen_color_blue_x');
+		player.RemoveAbility('greater_mutagen_color_green_white_green_x');
+		player.RemoveAbility('greater_mutagen_color_green_white_white_x');
+		player.RemoveAbility('greater_mutagen_color_green_x');
+		player.RemoveAbility('greater_mutagen_color_red_blue_blue_x');
+		player.RemoveAbility('greater_mutagen_color_red_blue_red_x');
+		player.RemoveAbility('greater_mutagen_color_red_green_green_x');
+		player.RemoveAbility('greater_mutagen_color_red_green_red_x');
+		player.RemoveAbility('greater_mutagen_color_red_white_red_x');
+		player.RemoveAbility('greater_mutagen_color_red_white_white_x');
+		player.RemoveAbility('greater_mutagen_color_red_x');
+		player.RemoveAbility('greater_mutagen_color_white_x');
+		player.RemoveAbility('lesser_mutagen_color_blue_x');
+		player.RemoveAbility('lesser_mutagen_color_green_x');
+		player.RemoveAbility('lesser_mutagen_color_red_x');
+		player.RemoveAbility('mutagen_color_blue_x');
+		player.RemoveAbility('mutagen_color_green_x');
+		player.RemoveAbility('mutagen_color_red_x');
+		player.RemoveAbility('greater_mutagen_color_yellow_x');
+		player.RemoveAbility('mutagen_color_yellow_x');
+		player.RemoveAbility('lesser_mutagen_color_yellow_x');
+	}
+	SLS_Log("mutagen colour-match multiplier cleared - the character screen sets it again when it is opened");
+}
+
+// The skills-and-mutagens half of a switch: record what the loadout (or Always worn box) being left has, then put in
+// what the target gets.
+function SLS_SwitchSkills(player : W3PlayerWitcher, inv : CInventoryComponent, from : int, to : int)
+{
+	var src : int;
+	var changed : bool;
+
+	if (from >= 0 || from == -2)
+	{
+		SLS_RecordSkills(player, from);
+		SLS_RecordMutagens(player, inv, from);
+	}
+	changed = false;
+	src = SLS_SkillSource(to, true);
+	if (src == -3)
+	{
+		SLS_Log("skills stay as they are: no always-worn skill set yet (it is recorded when you leave Always worn)");
+	}
+	else
+	{
+		if (to >= 0 && src == -2)
+		{
+			SLS_Log("skills: " + SLS_Describe(to) + " holds no skill set - the always-worn skill set is used");
+		}
+		SLS_ApplySkills(player, src);
+		changed = true;
+	}
+	src = SLS_SkillSource(to, false);
+	if (src == -3)
+	{
+		SLS_Log("mutagens stay as they are: no always-worn mutagens yet (they are recorded when you leave Always worn)");
+	}
+	else
+	{
+		if (to >= 0 && src == -2)
+		{
+			SLS_Log("mutagens: " + SLS_Describe(to) + " holds no mutagens - the always-worn mutagens are used");
+		}
+		SLS_ApplyMutagens(player, inv, src);
+		changed = true;
+	}
+	if (changed)
+	{
+		SLS_ClearColourBonus(player);
+	}
+}
+
+// One line per set for SLS_DebugState: "skills=3 mutagens=2".
+function SLS_SkillSummary(which : int) : string
+{
+	return "skills=" + IntToString(SLS_SkillCount(which)) + " mutagens=" + IntToString(SLS_MutagenCount(which));
 }
 
 // ---- the switch --------------------------------------------------------------------------------------------------
@@ -998,6 +1424,9 @@ function SLS_Press(box : int)
 		restored = SLS_Restore(this, player, hm, inv, stash, to);
 	}
 	SLS_ReapplyAlways(this, player, hm, inv, stash);
+	// skills and mutagens: the loadout (or Always worn box) left records its set, the target gets its own or the
+	// always-worn one
+	SLS_SwitchSkills(player, inv, from, to);
 	SLS_SetActive(to);
 	if (kept > 0)
 	{
@@ -1126,6 +1555,15 @@ function SLS_DebugState() : string
 			}
 		}
 		text += "]";
+	}
+	// how many skills / mutagens each set holds
+	text += "; skill sets: A " + SLS_SkillSummary(-2);
+	for (i = 0; i < SLS_MaxLoadouts(); i += 1)
+	{
+		if (SLS_SkillCount(i) > 0 || SLS_MutagenCount(i) > 0)
+		{
+			text += ", L" + IntToString(i + 1) + " " + SLS_SkillSummary(i);
+		}
 	}
 	// what Roach wears now (the horse manager's slots) and Geralt's trophy
 	slots = SLS_HorseSlots();
