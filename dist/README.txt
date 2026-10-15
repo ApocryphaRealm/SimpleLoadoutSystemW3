@@ -43,8 +43,11 @@ HOW IT WORKS
   always-worn mutagens (each decided on its own). No loadout at all also uses the always-worn skills and mutagens.
 - The extra bonus a mutagen gets from matching skill colours is set again straight after every switch, the same way
   the Character screen sets it.
-- Upgrading from 1.0.2: your loadouts hold no horse gear yet. The first time you leave each one, Roach's gear and your
-  trophy are stored in it; until then, selecting it leaves Roach bare (her gear is safe in the loadout you left).
+- Upgrading from 1.0.2 or 1.0.3: your loadouts hold no horse gear, skills or mutagens yet, so set up "Always worn"
+  first: select it, equip the skills, mutagens, horse gear and trophy you want as the default, and leave the box.
+  A loadout then uses the always-worn skills and mutagens until it has its own. Each loadout records its own skills,
+  mutagens, horse gear and trophy the first time you leave it; until then, selecting it leaves Roach bare (her gear is
+  safe in the loadout you left).
 - Where the gear is kept: the stash - the one every stash chest in the world opens. Stored loadout gear is hidden from
   the stash's list, so it is not taken out by mistake. Loadouts and the always-worn set are saved with your game.
 - Upgrading from 1.0.0 or 1.0.1: those versions lost their loadouts at every load (the stored gear stayed in the

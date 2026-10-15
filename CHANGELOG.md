@@ -2,7 +2,7 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.3 - 2026-10-14 - untested (the 'no settings save from the poll' build; the first mod.io package; then the 'horse gear', 'horse gear locked' and 'always worn horse, skills' builds, 2026-10-15)
+## 1.0.4 - 2026-10-15 - untested (the 'colour bonus' build, 80f4bca: horse gear, the trophy, skills and mutagens per loadout; built under 1.0.3 as the 'horse gear', 'horse gear locked', 'always worn horse, skills' and 'colour bonus' builds, then given the next number because mod.io's 1.0.3 file is the poll fix alone)
 
 * **Each loadout remembers its skills and mutagens, with the always-worn set as the fallback** (the owner, 2026-10-15:
   *"i want the loadout to remember which skills and mutagens were equipped in that loadout as well so it acts the same
@@ -83,6 +83,10 @@ Versions are issued by the project's version gate. Written as the change happens
   marks horse pieces `(horse)`, a loadout that keeps horse gear `+horse`, and lists what the horse wears now.
 * No new text on screen (no string-table change); the movie, bundle and settings XML are unchanged.
 * The mod.io 1.0.3 file (in CD PROJEKT RED's review) was built before this and does not have horse gear.
+
+* **Upgrading from 1.0.2 or 1.0.3:** existing loadouts hold no horse gear, skills or mutagens yet. Set up Always worn first (select it, equip the skills, mutagens, horse gear and trophy you want as the default, and leave the box): a loadout with no skill set of its own then gets the always-worn skills, and one with no mutagens the always-worn mutagens. Each loadout records its own set, and Roach's gear, the first time it is left.
+
+## 1.0.3 - 2026-10-14 - working (the 'no settings save from the poll' build, 83d71bd; posted on mod.io as file 8325752 - the owner published it 2026-10-14, in CD PROJEKT RED's review; tested in game from its mod.io content 2026-10-14 08:52-08:58)
 
 * **Fixed: with no menu XML installed, the Loadouts setting was written and saved twice a second.** `SLS_Count` read
   an empty or missing `SimpleLoadoutSystem` / `LoadoutCount` as invalid, wrote the default and called
