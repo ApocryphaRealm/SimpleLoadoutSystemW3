@@ -2,7 +2,7 @@
 
 Versions are issued by the project's version gate. Written as the change happens (rule 61).
 
-## 1.0.4 - 2026-10-15 - untested (the 'colour bonus' build, 80f4bca: horse gear, the trophy, skills and mutagens per loadout; built under 1.0.3 as the 'horse gear', 'horse gear locked', 'always worn horse, skills' and 'colour bonus' builds, then given the next number because mod.io's 1.0.3 file is the poll fix alone)
+## 1.0.4 - 2026-10-15 - working (the owner confirmed it in game, 2026-10-15; the 'colour bonus' build, 80f4bca: horse gear, the trophy, skills and mutagens per loadout; built under 1.0.3 as the 'horse gear', 'horse gear locked', 'always worn horse, skills' and 'colour bonus' builds, then given the next number because mod.io's 1.0.3 file is the poll fix alone)
 
 * **Each loadout remembers its skills and mutagens, with the always-worn set as the fallback** (the owner, 2026-10-15:
   *"i want the loadout to remember which skills and mutagens were equipped in that loadout as well so it acts the same
